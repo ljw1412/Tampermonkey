@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.0.6
+// @version      2.0.7
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -408,7 +408,7 @@ const _DATA_ = {
       },
       {
         name: '红狐解析',
-        type: [1, 2],
+        type: [2],
         url: 'https://rdfplayer.mrgaocloud.com/player/?url='
       }
     ],
@@ -1018,16 +1018,13 @@ class View {
     if (this.root) {
       updateElement(this.root, {
         dataset: { position: this.position[2] },
-        style: `${this.position[0]}: ${_CONFIG_.offsetY}px;
-        ${this.position[1]}: 0;`
+        style: `${this.position[0]}: ${_CONFIG_.offsetY}px; ${this.position[1]}: 0;`
       })
     }
     if (this.paneVip) {
       const translateX = this.position[1] === 'left' ? '100%' : '-100%'
       updateElement(this.paneVip, {
-        style: `${this.position[0]}: 0;
-           ${this.position[1] === 'left' ? 'right' : 'left'}: 0;
-          transform: translateX(${translateX})`
+        style: `${this.position[0]}: 0; ${this.position[1]}: 0;`
       })
     }
   }
@@ -1070,18 +1067,12 @@ class View {
 
   #generateVipBtn() {
     const createElement = Utils.DOM.createElement
-    const btnVip = createElement('div', {
-      id: btnVipId,
-      className: BUTTON_CLASS,
-      innerHTML: 'VIP',
-      dataset: { auto: this._core.isAuto }
-    })
     const paneVip = createElement('div', {
       id: paneVipId,
       dataset: { tab: GM_getValue(`${name}-vip-tab`, 'inner') }
     })
     this.paneVip = paneVip
-    btnVip.appendChild(paneVip)
+    this.root.appendChild(paneVip)
 
     const paneTabs = createElement('div', { id: `${BASE_NAME}_vip-tabs` })
     const paneTabList = []
@@ -1164,7 +1155,19 @@ class View {
     paneContent.appendChild(paneOuter)
     paneVip.appendChild(paneContent)
 
-    if (this.root) this.root.appendChild(btnVip)
+    const btnVip = createElement('div', {
+      id: btnVipId,
+      className: BUTTON_CLASS,
+      innerHTML: 'VIP',
+      dataset: { auto: this._core.isAuto }
+    })
+    btnVip.addEventListener('mouseenter', () => {
+      this.paneVip.style.display = 'flex'
+    })
+    btnVip.addEventListener('mouseleave', () => {
+      this.paneVip.style.display = ''
+    })
+    this.root.appendChild(btnVip)
   }
 
   #generateVipPaneGrid(parentEl, list = [], isLink = false) {
@@ -1229,6 +1232,7 @@ class View {
   transform: translateX(0) !important;
 }
 .${BUTTON_CLASS}{
+  position: relative;
   display: block;
   width: 38px;
   height: 38px;
@@ -1255,22 +1259,24 @@ class View {
 #${btnWebfullscreenId}{background: #168cff;}
 #${paneVipId}{
   position: absolute;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(5px);
   display: none;
   flex-direction: column;
   width: 320px;
-  height: 320px;
+  height: 324px;
+  padding-right: 38px;
   cursor: initial;
   color: #fff;
   font-weight: initial;
   text-align: left;
+  border: 1px solid #333;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(3px);
 }
-#${btnVipId}:hover #${paneVipId}{display: flex;}
-#${BASE_NAME}_vip-tabs{ display: flex; border-bottom: 1px solid #333;}
+#${paneVipId}:hover{ display: flex; }
+#${BASE_NAME}_vip-tabs{ display: flex; border-bottom: 1px solid #333;     border-right: 1px solid #333;}
 .${BASE_NAME}_vip-tab{ flex-shrink: 0; margin:6px 8px; font-size: 16px; font-weight: bold; cursor: pointer;}
 .${BASE_NAME}_vip-tab[data-active="true"]{ color: #e4a329; }
-#${BASE_NAME}_vip-container{ flex-grow: 1; height: 0; overflow-y: auto; }
+#${BASE_NAME}_vip-container{ flex-grow: 1; height: 0; overflow-y: auto;     border-right: 1px solid #333;}
 #${BASE_NAME}_vip-container::-webkit-scrollbar { width: 6px; height: 6px; }
 #${BASE_NAME}_vip-container::-webkit-scrollbar-thumb { box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2); background: #a8a8a8; border-radius: 4px;}
 #${BASE_NAME}_vip-container::-webkit-scrollbar-track { box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2); background: #000000; }
