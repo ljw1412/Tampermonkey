@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.0.4
+// @version      2.0.5
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -779,9 +779,12 @@ class Core {
       if (position && position !== _CONFIG_.position) {
         _CONFIG_.position = position
         GM_setValue(`${APP_NAME}:position`, position)
-      } else if (offsetY !== _CONFIG_.offsetY) {
-        _CONFIG_.position = offsetY
+        this.logger.info('Emitter[position-change]', 'position:', position)
+      }
+      if (typeof offsetY === 'number' && offsetY !== _CONFIG_.offsetY) {
+        _CONFIG_.offsetY = offsetY
         GM_setValue(`${APP_NAME}:offsetY`, offsetY)
+        this.logger.info('Emitter[position-change]', 'offsetY:', offsetY)
       }
       this._view.updateViewPosition()
     })
@@ -1000,21 +1003,16 @@ class View {
     if (this.root) {
       updateElement(this.root, {
         dataset: { position: this.position[2] },
-        style: {
-          [this.position[0]]: `${_CONFIG_.offsetY}px`,
-          [this.position[1]]: '0'
-        }
+        style: `${this.position[0]}: ${_CONFIG_.offsetY}px;
+        ${this.position[1]}: 0;`
       })
     }
     if (this.paneVip) {
+      const translateX = this.position[1] === 'left' ? '100%' : '-100%'
       updateElement(this.paneVip, {
-        style: {
-          [this.position[0]]: 0,
-          [this.position[1] === 'left' ? 'right' : 'left']: 0,
-          transform: `translateX(${
-            this.position[1] === 'left' ? '100%' : '-100%'
-          })`
-        }
+        style: `${this.position[0]}: 0;
+           ${this.position[1] === 'left' ? 'right' : 'left'}: 0;
+          transform: translateX(${translateX})`
       })
     }
   }
@@ -1204,7 +1202,7 @@ class View {
   user-select: none;
 }
 #${BASE_NAME}[data-inited='true'] {
-  transition: transform 0.1s;
+  transition: transform 0.1s, left 0.3s, top 0.3s, right 0.3s, bottom 0.3s;
 }
 #${BASE_NAME}[data-inited='true'][data-position$='l']{
   transform: translateX(-80%);
