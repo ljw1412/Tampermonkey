@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.0.1
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -19,6 +19,8 @@
 // @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_registerMenuCommand
+// @grant        GM_unregisterMenuCommand
 // ==/UserScript==
 
 /* global ajaxHooker mgtvPlayer txv videoPlayer QiyiPlayerLoader QyLoginInst QySdk _player */
@@ -31,6 +33,8 @@ const _CONFIG_ = {
   position: 'br', // 可选项'tl','tr','bl','br'
   offsetY: 120
 }
+_CONFIG_.position = GM_getValue(`${APP_NAME}:position`, 'tl')
+_CONFIG_.offsetY = GM_getValue(`${APP_NAME}:offsetY`, 120)
 /*=====================================*/
 /*<<<<<<<<<<<< 核心数据 >>>>>>>>>>>>*/
 const _DATA_ = {
@@ -582,12 +586,20 @@ const ObjectUtil = {
       ret[key] = obj[key]
       return ret
     }, {})
+  },
+  isElement(el) {
+    return el instanceof Element
   }
 }
 
 const DOMUtils = {
   createElement(tagName = 'div', options = {}) {
     const el = document.createElement(tagName)
+    DOMUtils.updateElement(el, options)
+    return el
+  },
+  updateElement(el, options = {}) {
+    if (!el || !ObjectUtil.isElement(el)) return
     if (options.class) {
       options.className = options.class
     }
@@ -609,7 +621,6 @@ const DOMUtils = {
         el.style[key] = value
       })
     }
-    return el
   }
 }
 
@@ -635,9 +646,10 @@ const btnRestore = Utils.DOM.createElement('span', {
 })
 
 class Core {
-  #hooker
+  _view = null
   logger = new Logger('core')
   bakPlayerId = `${BASE_NAME}_original-player`
+  menuIds = []
   constructor(site) {
     this._site = site
     this.btns = {
@@ -665,6 +677,7 @@ class Core {
     this.urlWatchTimer.start()
     this.#initHooker()
     this.#bindEvent()
+    this.#registerMenuCommand()
     this.init()
   }
 
@@ -674,6 +687,13 @@ class Core {
 
   set isAuto(v) {
     GM_setValue(`${this.name}_vip-auto`, v)
+  }
+
+  get position() {
+    const { position = 'tl' } = _CONFIG_
+    const py = position.includes('b') ? 'bottom' : 'top'
+    const px = position.includes('r') ? 'right' : 'left'
+    return [py, px, py[0] + px[0]]
   }
 
   #createUrlWatchTimer() {
@@ -750,6 +770,56 @@ class Core {
       this.replacePlayer(url, href)
       selectedVipName = name
     })
+
+    $emitter.on('position-change', (position, offsetY) => {
+      if (!this._view) {
+        this.logger.error('Emitter[position-change]', '未找到"_view"')
+        return
+      }
+      if (position && position !== _CONFIG_.position) {
+        _CONFIG_.position = position
+        GM_setValue(`${APP_NAME}:position`, position)
+      } else if (offsetY !== _CONFIG_.offsetY) {
+        _CONFIG_.position = offsetY
+        GM_setValue(`${APP_NAME}:offsetY`, offsetY)
+      }
+      this._view.updateViewPosition()
+    })
+  }
+
+  #unregisterMenuCommand() {
+    for (let i = 0; i < this.menuIds.length; i++) {
+      const menuId = this.menuIds[i]
+      GM_unregisterMenuCommand(menuId)
+    }
+    this.menuIds = []
+  }
+  #registerMenuCommand() {
+    const positionMap = { lt: '↖左上', lb: '↙左下', rt: '↗右上', rb: '↘右下' }
+    const menuList = [
+      {
+        name: `设置顶部或底部的距离`,
+        fn() {
+          const v = window.prompt(this.name, _CONFIG_.offsetY)
+          if (v !== null && Number(v) >= 0) {
+            $emitter.emit('position-change', null, Number(v))
+          }
+        },
+        options: { id: 'offsetY' }
+      },
+      ...Object.keys(positionMap).map((position) => {
+        return {
+          name: `调整浮窗位置：${positionMap[position]}`,
+          fn: () => {
+            $emitter.emit('position-change', position)
+          },
+          options: { id: `position-${position}` }
+        }
+      })
+    ]
+    this.menuIds = menuList.map((menu) =>
+      GM_registerMenuCommand(menu.name, menu.fn, menu.options || {})
+    )
   }
 
   init() {
@@ -903,34 +973,53 @@ const paneItemClass = BASE_NAME + '_grid-item'
 const btnSkipId = BASE_NAME + '_btn-skip'
 const btnWebfullscreenId = BASE_NAME + '_btn-webfullscreen'
 class View {
+  root = null
+  paneVip = null
+
   constructor(core) {
-    this.core = core
+    this._core = core
+    core._view = this
     this.#generateStyle()
     this.#generate()
+    this.updateViewPosition()
     btnRestore.addEventListener('click', () => {
       core.restorePlayer()
     })
   }
 
   get position() {
-    const { position = 'tl' } = _CONFIG_
-    const py = position.includes('b') ? 'bottom' : 'top'
-    const px = position.includes('r') ? 'right' : 'left'
-    return [py, px, py[0] + px[0]]
+    return this._core.position
   }
 
-  #generate() {
-    const createElement = Utils.DOM.createElement
-    this.root = document.getElementById(BASE_NAME)
-    if (!this.root) {
-      this.root = createElement('div', {
-        id: BASE_NAME,
+  updateViewPosition() {
+    const updateElement = Utils.DOM.updateElement
+    if (this.root) {
+      updateElement(this.root, {
         dataset: { position: this.position[2] },
         style: {
           [this.position[0]]: `${_CONFIG_.offsetY}px`,
           [this.position[1]]: '0'
         }
       })
+    }
+    if (this.paneVip) {
+      updateElement(this.paneVip, {
+        style: {
+          [this.position[0]]: 0,
+          [this.position[1] === 'left' ? 'right' : 'left']: 0,
+          transform: `translateX(${
+            this.position[1] === 'left' ? '100%' : '-100%'
+          })`
+        }
+      })
+    }
+  }
+
+  #generate() {
+    const createElement = Utils.DOM.createElement
+    this.root = document.getElementById(BASE_NAME)
+    if (!this.root) {
+      this.root = createElement('div', { id: BASE_NAME })
       document.body.appendChild(this.root)
       if (_CONFIG_.showVipBtn) this.#generateVipBtn()
       setTimeout(() => {
@@ -938,25 +1027,25 @@ class View {
       }, 1000)
     }
 
-    if (this.core.btns.skipAD && !document.getElementById(btnSkipId)) {
+    if (this._core.btns.skipAD && !document.getElementById(btnSkipId)) {
       const btn = createElement('div', {
         id: btnSkipId,
         className: BUTTON_CLASS,
         innerHTML: '跳过<br/>广告',
-        onclick: this.core.skipAD
+        onclick: this._core.skipAD
       })
       this.root.appendChild(btn)
     }
 
     if (
-      this.core.btns.webFullscreen &&
+      this._core.btns.webFullscreen &&
       !document.getElementById(btnWebfullscreenId)
     ) {
       const btn = createElement('div', {
         id: btnWebfullscreenId,
         className: BUTTON_CLASS,
         innerHTML: '网页<br/>全屏',
-        onclick: this.core.webFullscreen
+        onclick: this._core.webFullscreen
       })
       this.root.appendChild(btn)
     }
@@ -968,20 +1057,13 @@ class View {
       id: btnVipId,
       className: BUTTON_CLASS,
       innerHTML: 'VIP',
-      dataset: { auto: this.core.isAuto }
+      dataset: { auto: this._core.isAuto }
     })
-    const paneVip = createElement('div', {
+    this.paneVip = createElement('div', {
       id: paneVipId,
-      dataset: { tab: GM_getValue(`${name}-vip-tab`, 'inner') },
-      style: {
-        [this.position[0]]: 0,
-        [this.position[1] === 'left' ? 'right' : 'left']: 0,
-        transform: `translateX(${
-          this.position[1] === 'left' ? '100%' : '-100%'
-        })`
-      }
+      dataset: { tab: GM_getValue(`${name}-vip-tab`, 'inner') }
     })
-    btnVip.appendChild(paneVip)
+    btnVip.appendChild(this.paneVip)
 
     const paneTabs = createElement('div', { id: `${BASE_NAME}_vip-tabs` })
     const paneTabList = []
@@ -989,7 +1071,7 @@ class View {
       paneTabList.forEach((tab) => {
         tab.dataset.active = tab === this
       })
-      paneVip.dataset.tab = this.value
+      this.paneVip.dataset.tab = this.value
       GM_setValue(`${name}-vip-tab`, this.value)
     }
     const paneTab1 = createElement('div', {
@@ -1009,7 +1091,7 @@ class View {
       tab.dataset.active = tab.value === GM_getValue(`${name}-vip-tab`, 'inner')
       paneTabs.appendChild(tab)
     })
-    paneVip.appendChild(paneTabs)
+    this.paneVip.appendChild(paneTabs)
 
     const paneContent = createElement('div', {
       id: `${BASE_NAME}_vip-container`
@@ -1040,11 +1122,11 @@ class View {
     }
     const btnAuto = createElement('div', {
       id: `${BASE_NAME}_vip-auto`,
-      innerHTML: getAutoContent(this.core.isAuto)
+      innerHTML: getAutoContent(this._core.isAuto)
     })
     btnAuto.addEventListener('click', () => {
-      btnAuto.innerHTML = getAutoContent(!this.core.isAuto)
-      this.core.isAuto = !this.core.isAuto
+      btnAuto.innerHTML = getAutoContent(!this._core.isAuto)
+      this._core.isAuto = !this._core.isAuto
       window.location.reload()
     })
     paneInnerTip.appendChild(btnAuto)
@@ -1062,7 +1144,7 @@ class View {
     )
     paneContent.appendChild(paneInner)
     paneContent.appendChild(paneOuter)
-    paneVip.appendChild(paneContent)
+    this.paneVip.appendChild(paneContent)
 
     if (this.root) this.root.appendChild(btnVip)
   }
