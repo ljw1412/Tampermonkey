@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.0.1
+// @version      2.0.4
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -795,12 +795,16 @@ class Core {
     this.menuIds = []
   }
   #registerMenuCommand() {
+    const that = this
     const positionMap = { lt: '↖左上', lb: '↙左下', rt: '↗右上', rb: '↘右下' }
     const menuList = [
       {
         name: `设置顶部或底部的距离`,
         fn() {
-          const v = window.prompt(this.name, _CONFIG_.offsetY)
+          const v = window.prompt(
+            `设置距离${that.position[0] === 'top' ? '顶部' : '底部'}的间距：`,
+            _CONFIG_.offsetY
+          )
           if (v !== null && Number(v) >= 0) {
             $emitter.emit('position-change', null, Number(v))
           }
@@ -1059,11 +1063,12 @@ class View {
       innerHTML: 'VIP',
       dataset: { auto: this._core.isAuto }
     })
-    this.paneVip = createElement('div', {
+    const paneVip = createElement('div', {
       id: paneVipId,
       dataset: { tab: GM_getValue(`${name}-vip-tab`, 'inner') }
     })
-    btnVip.appendChild(this.paneVip)
+    this.paneVip = paneVip
+    btnVip.appendChild(paneVip)
 
     const paneTabs = createElement('div', { id: `${BASE_NAME}_vip-tabs` })
     const paneTabList = []
@@ -1071,7 +1076,7 @@ class View {
       paneTabList.forEach((tab) => {
         tab.dataset.active = tab === this
       })
-      this.paneVip.dataset.tab = this.value
+      paneVip.dataset.tab = this.value
       GM_setValue(`${name}-vip-tab`, this.value)
     }
     const paneTab1 = createElement('div', {
@@ -1091,7 +1096,7 @@ class View {
       tab.dataset.active = tab.value === GM_getValue(`${name}-vip-tab`, 'inner')
       paneTabs.appendChild(tab)
     })
-    this.paneVip.appendChild(paneTabs)
+    paneVip.appendChild(paneTabs)
 
     const paneContent = createElement('div', {
       id: `${BASE_NAME}_vip-container`
@@ -1144,7 +1149,7 @@ class View {
     )
     paneContent.appendChild(paneInner)
     paneContent.appendChild(paneOuter)
-    this.paneVip.appendChild(paneContent)
+    paneVip.appendChild(paneContent)
 
     if (this.root) this.root.appendChild(btnVip)
   }
@@ -1230,6 +1235,7 @@ class View {
   font-size: 16px;
   line-height:29px;
   font-weight: bold;
+  white-space: nowrap;
 }
 #${btnVipId}[data-auto='true']{ background: #00b42a;}
 #${btnSkipId}{background: #ff7d00;}
