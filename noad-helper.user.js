@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.0.7
+// @version      2.0.8
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -277,6 +277,13 @@ const _DATA_ = {
       webFullscreen: () => {
         const btnFakeFullscreen = document.querySelector('.txp_btn_fake')
         if (btnFakeFullscreen) btnFakeFullscreen.click()
+      },
+      beforeReplace(href) {
+        const payTipsEl = document.querySelector('.panel-tip-pay')
+        if (payTipsEl) {
+          payTipsEl.style.display = 'none'
+        }
+        return href
       }
     },
     'sohu.com': {
@@ -1263,7 +1270,7 @@ class View {
   flex-direction: column;
   width: 320px;
   height: 324px;
-  padding-right: 38px;
+  padding-right: 36px;
   cursor: initial;
   color: #fff;
   font-weight: initial;
