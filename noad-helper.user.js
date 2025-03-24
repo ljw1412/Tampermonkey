@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.0.8
+// @version      2.0.9
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -9,7 +9,9 @@
 // @match        https://www.iqiyi.com/v_*
 // @match        https://www.iqiyi.com/w_*
 // @match        https://www.mgtv.com/b/*/*.html*
+// @match        https://www.mgtv.com/s/*/*.html*
 // @match        https://v.qq.com/x/cover/*/*.html*
+// @match        https://www.le.com/ptv/vplay/*
 // @match        https://tv.sohu.com/v/*
 // @match        https://film.sohu.com/album/*
 // @match        https://www.1905.com/vod/play/*
@@ -293,6 +295,11 @@ const _DATA_ = {
       webFullscreen: () => {
         _player.ui.pageFsBtn.pageFsBtn.click()
       }
+    },
+    'le.com': {
+      name: 'letv',
+      mode: 'element',
+      container: '#le_playbox>#video'
     },
     '1905.com': {
       name: '1905',
@@ -858,6 +865,8 @@ class Core {
       `自动VIP: ${this.isAuto ? '开' : '关'}`
     )
 
+    this.beforeEach()
+
     if (this.isAuto) {
       selectedVipName = GM_getValue('selected-vip-name', '')
       this.logger.info(
@@ -879,18 +888,16 @@ class Core {
           this.logger.error('init', '未找到对应站点解析器：', selectedVipName)
         }
       }
+      if (this.mode === 'element') {
+        this.watchContainerTimer.start()
+      }
+      if (this.mode === 'handler' && !this.listening) {
+        this.bindEvent()
+        this.listening = true
+        this.logger.info('init', '绑定播放器事件监听')
+      }
     } else {
       this.restorePlayer()
-    }
-
-    this.beforeEach()
-    if (this.mode === 'element') {
-      this.watchContainerTimer.start()
-    }
-    if (this.mode === 'handler' && !this.listening) {
-      this.bindEvent()
-      this.listening = true
-      this.logger.info('init', '绑定播放器事件监听')
     }
   }
 
