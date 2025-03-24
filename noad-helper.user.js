@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.0.9
+// @version      2.1.0
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -888,16 +888,17 @@ class Core {
           this.logger.error('init', '未找到对应站点解析器：', selectedVipName)
         }
       }
-      if (this.mode === 'element') {
-        this.watchContainerTimer.start()
-      }
-      if (this.mode === 'handler' && !this.listening) {
-        this.bindEvent()
-        this.listening = true
-        this.logger.info('init', '绑定播放器事件监听')
-      }
     } else {
       this.restorePlayer()
+    }
+
+    if (this.mode === 'element') {
+      this.watchContainerTimer.start()
+    }
+    if (this.mode === 'handler' && !this.listening) {
+      this.bindEvent()
+      this.listening = true
+      this.logger.info('init', '绑定播放器事件监听')
     }
   }
 
