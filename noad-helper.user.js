@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.1
+// @version      2.1.2
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -663,7 +663,9 @@ const BASE_NAME = 'noad-helper'
 Logger._NAME_ = APP_NAME
 const $logger = new Logger('main')
 const $emitter = new Emitter()
-const $store = {}
+const $store = {
+  selectedVip: ''
+}
 const noop = () => {}
 // 存储DOM元素，方便全局使用
 const panes = { inner: [], outter: [] }
@@ -733,6 +735,7 @@ class Core {
   }
 
   set selectedVip(v) {
+    $store.selectedVip = v
     GM_setValue(`${this.name}:selected-vip`, v)
   }
 
@@ -879,16 +882,17 @@ class Core {
     this.beforeEach()
 
     if (this.isAuto) {
+      $store.selectedVip = this.selectedVip
       this.logger.info(
         'init',
-        `当前选中解析站点名称：${this.selectedVip || '无'}`
+        `当前选中解析站点名称：${$store.selectedVip || '无'}`
       )
 
-      if (this.selectedVip) {
-        let vipParser = _DATA_.VideoParser.findByName(this.selectedVip)
+      if ($store.selectedVip) {
+        let vipParser = _DATA_.VideoParser.findByName($store.selectedVip)
         if (!vipParser) {
           vipParser = _DATA_.VideoParser.list[0]
-          this.logger.warning('init', '未找到对应站点：', this.selectedVip)
+          this.logger.warning('init', '未找到对应站点：', $store.selectedVip)
           this.logger.info('init', '默认使用第一个站点解析器：', vipParser)
         } else {
           this.logger.success('init', '找到对应站点解析器：', vipParser)
@@ -1226,7 +1230,7 @@ class View {
           innerHTML: item.name,
           dataset: {
             url: item.url,
-            active: this._core.selectedVip === item.name
+            active: $store.selectedVip === item.name
           }
         })
         itemEl.vipData = item
