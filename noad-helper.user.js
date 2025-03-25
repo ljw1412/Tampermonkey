@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.0
+// @version      2.1.1
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -664,7 +664,6 @@ Logger._NAME_ = APP_NAME
 const $logger = new Logger('main')
 const $emitter = new Emitter()
 const $store = {}
-let selectedVipName = ''
 const noop = () => {}
 // 存储DOM元素，方便全局使用
 const panes = { inner: [], outter: [] }
@@ -711,11 +710,11 @@ class Core {
   }
 
   get isAuto() {
-    return GM_getValue(`${this.name}_vip-auto`, false)
+    return GM_getValue(`${this.name}:vip-auto`, false)
   }
 
   set isAuto(v) {
-    GM_setValue(`${this.name}_vip-auto`, v)
+    GM_setValue(`${this.name}:vip-auto`, v)
   }
 
   get position() {
@@ -723,6 +722,18 @@ class Core {
     const py = position.includes('b') ? 'bottom' : 'top'
     const px = position.includes('r') ? 'right' : 'left'
     return [py, px, py[0] + px[0]]
+  }
+
+  get selectedVip() {
+    let name = GM_getValue(`${this.name}:selected-vip`, '')
+    if (!name && _DATA_.VideoParser.list.length) {
+      name = _DATA_.VideoParser.list[0].name
+    }
+    return name
+  }
+
+  set selectedVip(v) {
+    GM_setValue(`${this.name}:selected-vip`, v)
   }
 
   #createUrlWatchTimer() {
@@ -797,7 +808,7 @@ class Core {
     $emitter.on('replace-player', ({ name, url, href }) => {
       this.logger.info('Emitter[replace-player]', name, url, href)
       this.replacePlayer(url, href)
-      selectedVipName = name
+      this.selectedVip = name
     })
 
     $emitter.on('position-change', (position, offsetY) => {
@@ -868,24 +879,26 @@ class Core {
     this.beforeEach()
 
     if (this.isAuto) {
-      selectedVipName = GM_getValue('selected-vip-name', '')
       this.logger.info(
         'init',
-        `当前选中解析站点名称：${selectedVipName || '无'}`
+        `当前选中解析站点名称：${this.selectedVip || '无'}`
       )
-      if (selectedVipName) {
-        const vipParser = _DATA_.VideoParser.findByName(selectedVipName)
-        if (vipParser) {
-          this.logger.success('init', '找到对应站点解析器：', vipParser)
-          this.autoVipFn = () => {
-            $emitter.emit('replace-player', {
-              name: vipParser.name,
-              url: vipParser.url,
-              href: window.location.href
-            })
-          }
+
+      if (this.selectedVip) {
+        let vipParser = _DATA_.VideoParser.findByName(this.selectedVip)
+        if (!vipParser) {
+          vipParser = _DATA_.VideoParser.list[0]
+          this.logger.warning('init', '未找到对应站点：', this.selectedVip)
+          this.logger.info('init', '默认使用第一个站点解析器：', vipParser)
         } else {
-          this.logger.error('init', '未找到对应站点解析器：', selectedVipName)
+          this.logger.success('init', '找到对应站点解析器：', vipParser)
+        }
+        this.autoVipFn = () => {
+          $emitter.emit('replace-player', {
+            name: vipParser.name,
+            url: vipParser.url,
+            href: window.location.href
+          })
         }
       }
     } else {
@@ -1028,6 +1041,14 @@ class View {
     return this._core.position
   }
 
+  get tab() {
+    return GM_getValue(`${this._core.name}:vip-tab`, 'inner')
+  }
+
+  set tab(v) {
+    GM_setValue(`${this._core.name}:vip-tab`, v)
+  }
+
   updateViewPosition() {
     const updateElement = Utils.DOM.updateElement
     if (this.root) {
@@ -1082,9 +1103,10 @@ class View {
 
   #generateVipBtn() {
     const createElement = Utils.DOM.createElement
+    const that = this
     const paneVip = createElement('div', {
       id: paneVipId,
-      dataset: { tab: GM_getValue(`${name}-vip-tab`, 'inner') }
+      dataset: { tab: this.tab }
     })
     this.paneVip = paneVip
     this.root.appendChild(paneVip)
@@ -1096,7 +1118,7 @@ class View {
         tab.dataset.active = tab === this
       })
       paneVip.dataset.tab = this.value
-      GM_setValue(`${name}-vip-tab`, this.value)
+      that.tab = this.value
     }
     const paneTab1 = createElement('div', {
       className: `${BASE_NAME}_vip-tab`,
@@ -1112,7 +1134,7 @@ class View {
     })
     paneTabList.push(paneTab1, paneTab2)
     paneTabList.forEach((tab) => {
-      tab.dataset.active = tab.value === GM_getValue(`${name}-vip-tab`, 'inner')
+      tab.dataset.active = tab.value === this.tab
       paneTabs.appendChild(tab)
     })
     paneVip.appendChild(paneTabs)
@@ -1204,7 +1226,7 @@ class View {
           innerHTML: item.name,
           dataset: {
             url: item.url,
-            active: !!selectedVipName && selectedVipName === item.name
+            active: this._core.selectedVip === item.name
           }
         })
         itemEl.vipData = item
@@ -1214,7 +1236,7 @@ class View {
             url: item.url,
             href: window.location.href
           })
-          GM_setValue('selected-vip-name', item.name)
+          this._core.selectedVip = item.name
           panes.inner.forEach((el) => {
             el.dataset.active = el.vipData === item
           })
