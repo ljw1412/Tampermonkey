@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.2
+// @version      2.1.3
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -11,6 +11,7 @@
 // @match        https://www.mgtv.com/b/*/*.html*
 // @match        https://www.mgtv.com/s/*/*.html*
 // @match        https://v.qq.com/x/cover/*/*.html*
+// @match        https://v.qq.com/x/page/*.html*
 // @match        https://www.le.com/ptv/vplay/*
 // @match        https://tv.sohu.com/v/*
 // @match        https://film.sohu.com/album/*
