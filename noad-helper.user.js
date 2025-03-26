@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.3
+// @version      2.1.4
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -26,7 +26,7 @@
 // @grant        GM_unregisterMenuCommand
 // ==/UserScript==
 
-/* global ajaxHooker mgtvPlayer txv videoPlayer QiyiPlayerLoader QyLoginInst QySdk _player */
+/* global ajaxHooker mgtvPlayer adPlayer txv videoPlayer QiyiPlayerLoader QyLoginInst QySdk _player */
 /* ajaxHooker文档 https://bbs.tampermonkey.net.cn/thread-3284-1-1.html */
 const APP_NAME = 'NOAD_HELPER'
 const _CONFIG_ = {
@@ -1305,7 +1305,6 @@ class View {
   flex-direction: column;
   width: 320px;
   height: 324px;
-  padding-right: 36px;
   cursor: initial;
   color: #fff;
   font-weight: initial;
@@ -1314,11 +1313,17 @@ class View {
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(3px);
 }
+#${BASE_NAME}[data-position$='l'] #${paneVipId}{
+  padding-left: 36px; 
+}
+#${BASE_NAME}[data-position$='r'] #${paneVipId}{
+  padding-right: 36px;
+}
 #${paneVipId}:hover{ display: flex; }
-#${BASE_NAME}_vip-tabs{ display: flex; border-bottom: 1px solid #333;     border-right: 1px solid #333;}
+#${BASE_NAME}_vip-tabs{ display: flex; border-bottom: 1px solid #333; background-color: rgba(255, 255, 255, 0.1);}
 .${BASE_NAME}_vip-tab{ flex-shrink: 0; margin:6px 8px; font-size: 16px; font-weight: bold; cursor: pointer;}
 .${BASE_NAME}_vip-tab[data-active="true"]{ color: #e4a329; }
-#${BASE_NAME}_vip-container{ flex-grow: 1; height: 0; overflow-y: auto;     border-right: 1px solid #333;}
+#${BASE_NAME}_vip-container{ flex-grow: 1; height: 0; overflow-y: auto; background-color: rgba(255, 255, 255, 0.1);}
 #${BASE_NAME}_vip-container::-webkit-scrollbar { width: 6px; height: 6px; }
 #${BASE_NAME}_vip-container::-webkit-scrollbar-thumb { box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2); background: #a8a8a8; border-radius: 4px;}
 #${BASE_NAME}_vip-container::-webkit-scrollbar-track { box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2); background: #000000; }
