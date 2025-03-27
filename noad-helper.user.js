@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.4
+// @version      2.1.5
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -1241,7 +1241,6 @@ class View {
             url: item.url,
             href: window.location.href
           })
-          this._core.selectedVip = item.name
           panes.inner.forEach((el) => {
             el.dataset.active = el.vipData === item
           })
@@ -1314,10 +1313,10 @@ class View {
   backdrop-filter: blur(3px);
 }
 #${BASE_NAME}[data-position$='l'] #${paneVipId}{
-  padding-left: 36px; 
+  padding-left: 38px;
 }
 #${BASE_NAME}[data-position$='r'] #${paneVipId}{
-  padding-right: 36px;
+  padding-right: 38px;
 }
 #${paneVipId}:hover{ display: flex; }
 #${BASE_NAME}_vip-tabs{ display: flex; border-bottom: 1px solid #333; background-color: rgba(255, 255, 255, 0.1);}
