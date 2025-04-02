@@ -745,6 +745,7 @@ class Core {
 
   set selectedVip(v) {
     $store.selectedVip = v
+    if (v) btnRestore.style.display = 'inline-block'
     if (v && v !== this.selectedVip) {
       GM_setValue(`${this.name}:selected-vip`, v)
       this.logger.info(`设置本地存储 "${this.name}:selected-vip"="${v}"`)
@@ -1004,7 +1005,6 @@ class Core {
       containerEl.innerHTML = ''
     }
     containerEl.appendChild(playerEl)
-    btnRestore.style.display = 'inline-block'
     this.logger.success('replacePlayer', '替换播放器')
   }
 
@@ -1227,7 +1227,7 @@ class View {
   #generateVipPaneGrid(parentEl, list = [], isLink = false) {
     const createElement = Utils.DOM.createElement
     const gridEl = createElement('div', { className: paneGridClass })
-
+    const tabType = isLink ? 'outter' : 'inner'
     list.forEach((item) => {
       let itemEl
       if (isLink) {
@@ -1255,13 +1255,11 @@ class View {
           })
         })
       }
-      if (itemEl) {
-        panes.inner.push(itemEl)
-        gridEl.appendChild(itemEl)
-      }
+      panes[tabType].push(itemEl)
+      gridEl.appendChild(itemEl)
     })
     parentEl.appendChild(gridEl)
-    return panes.inner
+    return panes[tabType]
   }
 
   #generateStyle() {
