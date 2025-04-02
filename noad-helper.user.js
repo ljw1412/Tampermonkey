@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.5
+// @version      2.1.6
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -19,6 +19,7 @@
 // @match        https://vip.1905.com/play/*
 // @icon         https://www.iqiyipic.com/common/fix/128-128-logo.png
 // @require      https://scriptcat.org/lib/637/1.4.5/ajaxHooker.js
+// @grant        unsafeWindow
 // @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -132,10 +133,10 @@ const _DATA_ = {
         const player = $store.player
         if (player) player._view.webfullscreen.toggle({ isManual: true })
       },
-      beforeReplacePlayer(href) {
+      beforeReplace(href) {
         const player = $store.player
         if (player) player.pause()
-        return href
+        return href.split('?')[0]
       }
     },
     'mgtv.com': {
@@ -225,6 +226,13 @@ const _DATA_ = {
       name: 'qqVideo',
       mode: 'element',
       container: '#mod_player,#player,#player-container',
+      // beforeEach() {
+      //   // TODO: 待研究
+      //   const vPlayerEl = document.querySelector('.player.container-player')
+      //   if (vPlayerEl) {
+      //     $logger.info('vPlayerEl', vPlayerEl.__vue__._setupState)
+      //   }
+      // },
       requestHooker: {
         filter: [{ url: '/proxyhttp' }],
         hooker(request) {
@@ -737,7 +745,13 @@ class Core {
 
   set selectedVip(v) {
     $store.selectedVip = v
-    GM_setValue(`${this.name}:selected-vip`, v)
+    if (v && v !== this.selectedVip) {
+      GM_setValue(`${this.name}:selected-vip`, v)
+      this.logger.info(`设置本地存储 "${this.name}:selected-vip"="${v}"`)
+    }
+    panes.inner.forEach((el) => {
+      el.dataset.active = el.vipData.name === v
+    })
   }
 
   #createUrlWatchTimer() {
@@ -883,7 +897,7 @@ class Core {
     this.beforeEach()
 
     if (this.isAuto) {
-      $store.selectedVip = this.selectedVip
+      if (!$store.selectedVip) $store.selectedVip = this.selectedVip
       this.logger.info(
         'init',
         `当前选中解析站点名称：${$store.selectedVip || '无'}`
@@ -1010,9 +1024,7 @@ class Core {
       containerEl.append(...bakPlayerEl.childNodes)
       bakPlayerEl.dataset.restorable = 'false'
       btnRestore.style.display = 'none'
-      panes.inner.forEach((el) => {
-        if (el && el.dataset) el.dataset.active = false
-      })
+      this.selectedVip = ''
       this.controlAllVideo(false)
       this.autoVipFn = noop
       this.logger.success('restorePlayer', '还原播放器')
@@ -1241,13 +1253,12 @@ class View {
             url: item.url,
             href: window.location.href
           })
-          panes.inner.forEach((el) => {
-            el.dataset.active = el.vipData === item
-          })
         })
       }
-      panes.inner.push(itemEl)
-      gridEl.appendChild(itemEl)
+      if (itemEl) {
+        panes.inner.push(itemEl)
+        gridEl.appendChild(itemEl)
+      }
     })
     parentEl.appendChild(gridEl)
     return panes.inner
@@ -1358,6 +1369,17 @@ class View {
   try {
     const core = new Core(site)
     const view = new View(core)
+    if (unsafeWindow) {
+      unsafeWindow.$noad = {
+        core,
+        view,
+        getValues: () =>
+          GM_listValues().reduce((obj, key) => {
+            obj[key] = GM_getValue(key, '')
+            return obj
+          }, {})
+      }
+    }
   } catch (error) {
     $logger.error(error)
   }
