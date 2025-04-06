@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.6
+// @version      2.1.7
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -325,7 +325,7 @@ const _DATA_ = {
         url: 'https://jx.xmflv.com/?url='
       },
       {
-        name: 'yparse',
+        name: '云溪',
         type: [1, 2],
         url: 'https://jx.yparse.com/index.php?url='
       },
@@ -333,6 +333,16 @@ const _DATA_ = {
         name: 'Player-JY',
         type: [1, 2],
         url: 'https://jx.playerjy.com/?url='
+      },
+      {
+        name: 'hls解析',
+        type: [1, 2],
+        url: 'https://jx.hls.one/?url='
+      },
+      {
+        name: '973播放',
+        type: [1, 2],
+        url: 'https://jx.973973.xyz/?url='
       },
       {
         name: 'm1907',
@@ -418,16 +428,6 @@ const _DATA_ = {
         name: '8090',
         type: [1, 2],
         url: 'https://www.8090g.cn/?url='
-      },
-      {
-        name: 'hls解析',
-        type: [1, 2],
-        url: 'https://jx.hls.one/?url='
-      },
-      {
-        name: '973播放',
-        type: [1, 2],
-        url: 'https://jx.973973.xyz/?url='
       },
       {
         name: '红狐解析',
