@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.8
+// @version      2.1.9
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -133,9 +133,11 @@ const _DATA_ = {
         const player = $store.player
         if (player) player._view.webfullscreen.toggle({ isManual: true })
       },
-      beforeReplace(href) {
+      beforeReplace() {
         const player = $store.player
         if (player) player.pause()
+      },
+      transformHref(href) {
         return href.split('?')[0]
       }
     },
@@ -212,7 +214,7 @@ const _DATA_ = {
           videoPlayer._player.webFullScreen()
         }
       },
-      beforeReplace(href) {
+      beforeReplace() {
         videoPlayer.pause()
         $logger.info('beforeReplace', '暂停官方播放器视频')
 
@@ -238,16 +240,17 @@ const _DATA_ = {
             $logger.info('close-cc-pop', '自动关闭VIP付费界面超时，自动停止！')
           }
         }, 100)
-
+      },
+      transformHref(href) {
         // 转换为旧地址以兼容
         if (href.includes('youku.com/video?')) {
           const UrlObj = new URL(href)
           const vid = UrlObj.searchParams.get('vid')
-          $logger.info('beforeReplace', `获取到的vid为${vid}`, UrlObj)
+          $logger.info('transformHref', `获取到的vid为${vid}`, UrlObj)
           if (vid) {
             const oldHref = href
             href = `https://v.youku.com/v_show/id_${vid}.html`
-            $logger.info('beforeReplace', '转换为旧地址：', oldHref, '=>', href)
+            $logger.info('transformHref', '转换为旧地址：', oldHref, '=>', href)
           }
         }
         return href
@@ -320,12 +323,12 @@ const _DATA_ = {
         const btnFakeFullscreen = document.querySelector('.txp_btn_fake')
         if (btnFakeFullscreen) btnFakeFullscreen.click()
       },
-      beforeReplace(href) {
+      beforeReplace() {
         const payTipsEl = document.querySelector('.panel-tip-pay')
         if (payTipsEl) {
           payTipsEl.style.display = 'none'
+          $logger.info('beforeReplace', '隐藏VIP付费界面')
         }
-        return href
       }
     },
     'sohu.com': {
@@ -734,7 +737,8 @@ class Core {
     this.bindEvent = (site.bindEvent ?? noop).bind(this)
     this.skipAD = (site.skipAD ?? noop).bind(this)
     this.webFullscreen = (site.webFullscreen ?? noop).bind(this)
-    this.beforeReplace = (site.beforeReplace ?? ((href) => href)).bind(this)
+    this.beforeReplace = (site.beforeReplace ?? noop).bind(this)
+    this.transformHref = (site.transformHref ?? ((href) => href)).bind(this)
     this.requestHooker = site.requestHooker ?? {}
     this.autoVipFn = noop
     this.urlWatchTimer = this.#createUrlWatchTimer()
@@ -1014,7 +1018,8 @@ class Core {
 
   replacePlayer(url, href) {
     if (!this.container || !url || !href) return
-    href = this.beforeReplace(href)
+    this.beforeReplace()
+    href = this.transformHref(href)
     const containerEl = document.querySelector(this.container)
     if (!containerEl) {
       return this.logger.error(
@@ -1266,7 +1271,7 @@ class View {
           className: paneItemClass,
           innerHTML: item.name,
           target: '_blank',
-          href: item.url + window.location.href
+          href: item.url + this._core.transformHref(window.location.href)
         })
       } else {
         itemEl = createElement('div', {
