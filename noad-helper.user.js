@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.9
+// @version      2.1.10
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -245,8 +245,12 @@ const _DATA_ = {
         // 转换为旧地址以兼容
         if (href.includes('youku.com/video?')) {
           const UrlObj = new URL(href)
-          const vid = UrlObj.searchParams.get('vid')
-          $logger.info('transformHref', `获取到的vid为${vid}`, UrlObj)
+          let vid = UrlObj.searchParams.get('vid')
+          $logger.info('transformHref', `网站地址获取到的vid为${vid}`, UrlObj)
+          if (!vid && typeof window.barrage === 'object') {
+            vid = window.barrage.vid
+            $logger.info('transformHref', `从barrage获取到的vid为${vid}`)
+          }
           if (vid) {
             const oldHref = href
             href = `https://v.youku.com/v_show/id_${vid}.html`
