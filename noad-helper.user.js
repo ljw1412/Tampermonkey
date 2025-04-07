@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.10
+// @version      2.1.11
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -241,20 +241,21 @@ const _DATA_ = {
           }
         }, 100)
       },
-      transformHref(href) {
+      transformHref(href, showLog = true) {
         // 转换为旧地址以兼容
         if (href.includes('youku.com/video?')) {
           const UrlObj = new URL(href)
           let vid = UrlObj.searchParams.get('vid')
-          $logger.info('transformHref', `网站地址获取到的vid为${vid}`, UrlObj)
-          if (!vid && typeof window.barrage === 'object') {
-            vid = window.barrage.vid
-            $logger.info('transformHref', `从barrage获取到的vid为${vid}`)
+          showLog &&
+            $logger.info('transformHref', `网站地址获取到的vid为${vid}`, UrlObj)
+          if (!vid && typeof unsafeWindow.barrage === 'object') {
+            vid = unsafeWindow.barrage.vid
+            showLog &&
+              $logger.info('transformHref', `从barrage获取到的vid为${vid}`)
           }
           if (vid) {
             const oldHref = href
             href = `https://v.youku.com/v_show/id_${vid}.html`
-            $logger.info('transformHref', '转换为旧地址：', oldHref, '=>', href)
           }
         }
         return href
@@ -1023,7 +1024,11 @@ class Core {
   replacePlayer(url, href) {
     if (!this.container || !url || !href) return
     this.beforeReplace()
+    const oHref = href
     href = this.transformHref(href)
+    if (href !== oHref) {
+      this.logger.info('transformHref', '转换为旧地址：', oHref, '=>', href)
+    }
     const containerEl = document.querySelector(this.container)
     if (!containerEl) {
       return this.logger.error(
@@ -1275,7 +1280,7 @@ class View {
           className: paneItemClass,
           innerHTML: item.name,
           target: '_blank',
-          href: item.url + this._core.transformHref(window.location.href)
+          href: item.url + this._core.transformHref(window.location.href, false)
         })
       } else {
         itemEl = createElement('div', {
