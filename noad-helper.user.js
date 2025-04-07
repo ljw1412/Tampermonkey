@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.7
+// @version      2.1.8
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -72,7 +72,7 @@ const _DATA_ = {
         // 登录弹窗相关
         QySdk.Event.on('LoginDialogShown', (e) => {
           if (QyLoginInst.enabled && QyLoginInst.params.s3 !== 'mainframe') {
-            $logger.info('LoginDialogShown', e, '弹出登录界面尝试关闭')
+            $logger.info('LoginDialogShown', e, '登录界面弹出，尝试关闭……')
             QyLoginInst.openLoginByJs({ type: 'normal', disable: true })
           }
         })
@@ -189,9 +189,16 @@ const _DATA_ = {
       bindEvent() {
         const onAdPlay = 'onadplay'
         videoPlayer.context.ad.on(onAdPlay, (e) => {
-          $logger.info(`Player[${onAdPlay}]`, '自动监听，执行跳过广告方法！')
+          $logger.info(`Player[${onAdPlay}]`, '自动监听，执行跳过广告方法！', e)
           this.skipAD()
           this.autoVipFn()
+        })
+
+        videoPlayer.context.eventBus.on('Player.Error', (e) => {
+          $logger.info(`Player[Player.Error]`, '官方播放器发生错误', e)
+          if (Object.assign({}, e).layer === 'VipLayer') {
+            this.autoVipFn()
+          }
         })
       },
       skipAD() {
@@ -208,6 +215,30 @@ const _DATA_ = {
       beforeReplace(href) {
         videoPlayer.pause()
         $logger.info('beforeReplace', '暂停官方播放器视频')
+
+        // 自动关闭VIP付费界面
+        if ($store.closeVipPayTimer) {
+          window.clearInterval($store.closeVipPayTimer)
+          $store.closeVipPayCount = 0
+        }
+        $store.closeVipPayTimer = setInterval(() => {
+          const ccPopCloseEl = document.querySelector(
+            '#checkout_counter_popup .cc_popup_window_close'
+          )
+          if (ccPopCloseEl) {
+            $logger.info('close-cc-pop', 'VIP付费界面弹出，尝试关闭……')
+            ccPopCloseEl.click()
+            window.clearInterval($store.closeVipPayTimer)
+          }
+          if (!$store.closeVipPayCount) $store.closeVipPayCount = 0
+          $store.closeVipPayCount++
+          // 10后仍未找到则自动停止
+          if ($store.closeVipPayCount >= 50) {
+            window.clearInterval($store.closeVipPayTimer)
+            $logger.info('close-cc-pop', '自动关闭VIP付费界面超时，自动停止！')
+          }
+        }, 100)
+
         // 转换为旧地址以兼容
         if (href.includes('youku.com/video?')) {
           const UrlObj = new URL(href)
