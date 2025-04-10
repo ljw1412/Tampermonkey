@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.12
+// @version      2.1.13
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -1280,7 +1280,7 @@ class View {
         })
         itemEl.addEventListener('click', () => {
           const href = this._core.transformHref(window.location.href)
-          window.open(href, '_blank')
+          window.open(item.url + href, '_blank')
         })
       } else {
         itemEl = createElement('div', {
