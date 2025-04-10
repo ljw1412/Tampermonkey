@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.11
+// @version      2.1.12
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -241,17 +241,15 @@ const _DATA_ = {
           }
         }, 100)
       },
-      transformHref(href, showLog = true) {
+      transformHref(href) {
         // 转换为旧地址以兼容
         if (href.includes('youku.com/video?')) {
           const UrlObj = new URL(href)
           let vid = UrlObj.searchParams.get('vid')
-          showLog &&
-            $logger.info('transformHref', `网站地址获取到的vid为${vid}`, UrlObj)
+          $logger.info('transformHref', `网站地址获取到的vid为${vid}`, UrlObj)
           if (!vid && typeof unsafeWindow.barrage === 'object') {
             vid = unsafeWindow.barrage.vid
-            showLog &&
-              $logger.info('transformHref', `从barrage获取到的vid为${vid}`)
+            $logger.info('transformHref', `从barrage获取到的vid为${vid}`)
           }
           if (vid) {
             const oldHref = href
@@ -1278,9 +1276,11 @@ class View {
       if (isLink) {
         itemEl = createElement('a', {
           className: paneItemClass,
-          innerHTML: item.name,
-          target: '_blank',
-          href: item.url + this._core.transformHref(window.location.href, false)
+          innerHTML: item.name
+        })
+        itemEl.addEventListener('click', () => {
+          const href = this._core.transformHref(window.location.href)
+          window.open(href, '_blank')
         })
       } else {
         itemEl = createElement('div', {
