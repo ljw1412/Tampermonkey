@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.13
+// @version      2.1.14
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -68,6 +68,7 @@ const _DATA_ = {
         }
       },
       bindEvent() {
+        const player = $store.player
         const engine = $store.engine
         // 登录弹窗相关
         QySdk.Event.on('LoginDialogShown', (e) => {
@@ -94,12 +95,9 @@ const _DATA_ = {
         engine.on(NTF_AD_BLOCK, (e) => {
           $logger.info(`Player[${NTF_AD_BLOCK}]`, '广告拦截倒计时空屏', e)
           if (typeof e === 'number') {
-            engine.adproxy._engineFire('adblock', '0')
+            player._view.adUI.hideAllAdUI()
             this.autoVipFn()
           }
-          // if(e > 1){
-          //     engine.adproxy.adLoad({"blackScreen": true, "blackScreenDuration": 0.1, "videoEventId": ""})
-          // }
         })
         engine.on(NTF_Recharge, (e) => {
           $logger.info(`Player[${NTF_Recharge}]`, '提示会员充值弹窗', e)
@@ -113,21 +111,16 @@ const _DATA_ = {
         document.body.appendChild(vipCoversBox)
       },
       skipAD: () => {
-        const engine = $store.engine
-        if (!engine) {
-          $logger.info('skipAD', '未找到播放器引擎！')
+        const player = $store.player
+        if (!player) {
+          $logger.info('skipAD', '未找到播放器管理对象！')
           return
         }
-        const e = engine.adproxy.getAdInfo()
-        engine.adproxy.adSDKFire('ad-click', {
-          id: e.id,
-          area: 'ad-skip'
-        })
-        engine.playproxy.abortAllAres(e.rollType)
-        engine.adproxy.rollEnd({
-          rollType: e.rollType,
-          videoEventId: e.videoEventId
-        })
+        try {
+          player._view.adUI.skipAd()
+        } catch (error) {
+          $logger.error('skipAD', '跳过广告失败！', error)
+        }
       },
       webFullscreen: () => {
         const player = $store.player
