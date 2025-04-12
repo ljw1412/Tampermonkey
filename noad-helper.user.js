@@ -82,7 +82,7 @@ const _DATA_ = {
       bindEvent() {
         const player = $store.player
         const engine = $store.engine
-        const adproxy = engine
+        const { adproxy } = engine
         // 登录弹窗相关
         QySdk.Event.on('LoginDialogShown', (e) => {
           if (QyLoginInst.enabled && QyLoginInst.params.s3 !== 'mainframe') {
