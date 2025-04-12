@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.15
+// @version      2.1.16
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -60,6 +60,18 @@ const _DATA_ = {
               if (engine) {
                 $store.engine = engine
                 $logger.info('beforeEach', '找到播放器引擎', engine)
+                try {
+                  const adManager = engine.playproxy.adManager
+                  adManager.handleBlackScreen = (e) => {
+                    $logger.info('hook', '企图展示广告拦截倒计时空屏被阻止！')
+                    adManager.adUI.hideAllAdUI()
+                  }
+                  $logger.info(
+                    'beforeEach',
+                    '发现adManager并劫持handleBlackScreen',
+                    adManager
+                  )
+                } catch (error) {}
                 return
               }
             }
@@ -70,8 +82,7 @@ const _DATA_ = {
       bindEvent() {
         const player = $store.player
         const engine = $store.engine
-        const adproxy = engine.adproxy
-        const adUI = player._view.adUI
+        const adproxy = engine
         // 登录弹窗相关
         QySdk.Event.on('LoginDialogShown', (e) => {
           if (QyLoginInst.enabled && QyLoginInst.params.s3 !== 'mainframe') {
@@ -97,9 +108,7 @@ const _DATA_ = {
         engine.on(NTF_AD_BLOCK, (e) => {
           $logger.info(`Player[${NTF_AD_BLOCK}]`, '广告拦截倒计时空屏', e)
           if (typeof e === 'number') {
-            if (adUI) {
-              adUI.hideAllAdUI()
-            } else if (adproxy) {
+            if (adproxy) {
               adproxy._engineFire('adblock', '0')
             } else {
               $logger.error('skipAdblock', '跳过Adblock黑屏失败！')
