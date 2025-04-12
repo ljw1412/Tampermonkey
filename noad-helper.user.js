@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.14
+// @version      2.1.15
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -70,6 +70,8 @@ const _DATA_ = {
       bindEvent() {
         const player = $store.player
         const engine = $store.engine
+        const adproxy = engine.adproxy
+        const adUI = player._view.adUI
         // 登录弹窗相关
         QySdk.Event.on('LoginDialogShown', (e) => {
           if (QyLoginInst.enabled && QyLoginInst.params.s3 !== 'mainframe') {
@@ -95,7 +97,13 @@ const _DATA_ = {
         engine.on(NTF_AD_BLOCK, (e) => {
           $logger.info(`Player[${NTF_AD_BLOCK}]`, '广告拦截倒计时空屏', e)
           if (typeof e === 'number') {
-            player._view.adUI.hideAllAdUI()
+            if (adUI) {
+              adUI.hideAllAdUI()
+            } else if (adproxy) {
+              adproxy._engineFire('adblock', '0')
+            } else {
+              $logger.error('skipAdblock', '跳过Adblock黑屏失败！')
+            }
             this.autoVipFn()
           }
         })
@@ -112,12 +120,28 @@ const _DATA_ = {
       },
       skipAD: () => {
         const player = $store.player
-        if (!player) {
-          $logger.info('skipAD', '未找到播放器管理对象！')
-          return
-        }
+        const engine = $store.engine || {}
+        const { adproxy, playproxy } = engine
+        const adUI = player._view.adUI
         try {
-          player._view.adUI.skipAd()
+          if (adUI) {
+            $logger.info('skipAD', '发现adUI，尝试跳过广告……')
+            adUI.skipAd()
+          } else if (adproxy) {
+            $logger.info('skipAD', '发现adproxy，尝试跳过广告……')
+            const e = adproxy.getAdInfo()
+            adproxy.adSDKFire('ad-click', {
+              id: e.id,
+              area: 'ad-skip'
+            })
+            if (playproxy) playproxy.abortAllAres(e.rollType)
+            adproxy.rollEnd({
+              rollType: e.rollType,
+              videoEventId: e.videoEventId
+            })
+          } else {
+            throw new Error('未找到控制广告的adUI和adproxy管理对象')
+          }
         } catch (error) {
           $logger.error('skipAD', '跳过广告失败！', error)
         }
