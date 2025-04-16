@@ -62,27 +62,29 @@ const _DATA_ = {
                 $logger.info('beforeEach', '找到播放器引擎', engine)
                 try {
                   const adManager = engine.playproxy.adManager
-                  adManager.handleBlackScreen = (e) => {
-                    $logger.info('hook', '阻止广告拦截倒计时空屏展示！', e)
-                    adManager.adUI.hideAllAdUI()
-                  }
-                  // adManager.updateAdInfo = () => {
-                  //   $logger.info('hook', '劫持广告信息更新方法')
-                  //   adManager.firstUpdateAdInfo = true
-                  //   adManager.currentAd = null
-                  // }
-                  const adLoad = adManager.adLoad.bind(adManager)
-                  adManager._adApi._load = adManager.adLoad = async (e) => {
-                    $logger.info('hook', '劫持广告加载方法', e)
-                    adManager.adUI.hideAllAdUI()
-                    if (Array.isArray(e)) {
-                      e.forEach((item) => {
-                        if (typeof item === 'object') item.duration = 0
-                      })
-                      adLoad(e.slice(0, 1))
+                  if (adManager) {
+                    $logger.info('beforeEach', '发现adManager并劫持', adManager)
+                    adManager.handleBlackScreen = (e) => {
+                      $logger.info('hook', '阻止广告拦截倒计时空屏展示！', e)
+                      adManager.adUI.hideAllAdUI()
+                    }
+                    // adManager.updateAdInfo = () => {
+                    //   $logger.info('hook', '劫持广告信息更新方法')
+                    //   adManager.firstUpdateAdInfo = true
+                    //   adManager.currentAd = null
+                    // }
+                    const adLoad = adManager.adLoad.bind(adManager)
+                    adManager._adApi._load = adManager.adLoad = async (e) => {
+                      $logger.info('hook', '劫持广告加载方法', e)
+                      adManager.adUI.hideAllAdUI()
+                      if (Array.isArray(e)) {
+                        e.forEach((item) => {
+                          if (typeof item === 'object') item.duration = 0
+                        })
+                        adLoad(e.slice(0, 1))
+                      }
                     }
                   }
-                  $logger.info('beforeEach', '发现adManager并劫持', adManager)
                 } catch (error) {
                   $logger.error('beforeEach', error)
                 }
