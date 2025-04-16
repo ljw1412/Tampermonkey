@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.17
+// @version      2.1.18
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -63,15 +63,29 @@ const _DATA_ = {
                 try {
                   const adManager = engine.playproxy.adManager
                   adManager.handleBlackScreen = (e) => {
-                    $logger.info('hook', '企图展示广告拦截倒计时空屏被阻止！')
+                    $logger.info('hook', '阻止广告拦截倒计时空屏展示！', e)
                     adManager.adUI.hideAllAdUI()
                   }
-                  $logger.info(
-                    'beforeEach',
-                    '发现adManager并劫持handleBlackScreen',
-                    adManager
-                  )
-                } catch (error) {}
+                  // adManager.updateAdInfo = () => {
+                  //   $logger.info('hook', '劫持广告信息更新方法')
+                  //   adManager.firstUpdateAdInfo = true
+                  //   adManager.currentAd = null
+                  // }
+                  const adLoad = adManager.adLoad.bind(adManager)
+                  adManager._adApi._load = adManager.adLoad = async (e) => {
+                    $logger.info('hook', '劫持广告加载方法', e)
+                    adManager.adUI.hideAllAdUI()
+                    if (Array.isArray(e)) {
+                      e.forEach((item) => {
+                        if (typeof item === 'object') item.duration = 0
+                      })
+                      adLoad(e.slice(0, 1))
+                    }
+                  }
+                  $logger.info('beforeEach', '发现adManager并劫持', adManager)
+                } catch (error) {
+                  $logger.error('beforeEach', error)
+                }
                 return
               }
             }
@@ -131,11 +145,19 @@ const _DATA_ = {
         const player = $store.player
         const engine = $store.engine || {}
         const { adproxy, playproxy } = engine
-        const adUI = player._view.adUI
+        const adManager = playproxy.adManager || {}
+        const { adUI, currentAd, gapsMap } = adManager
         try {
           if (adUI) {
-            $logger.info('skipAD', '发现adUI，尝试跳过广告……')
-            adUI.skipAd()
+            $logger.info('skipAD', '发现adUI，尝试跳过广告……', currentAd)
+            if (gapsMap instanceof Map) {
+              ;['preroll', 'briefRoll'].forEach((key) => {
+                gapsMap.set(key, { list: [] })
+              })
+            }
+            if (currentAd) {
+              adUI.skipAd(currentAd.type)
+            }
           } else if (adproxy) {
             $logger.info('skipAD', '发现adproxy，尝试跳过广告……')
             const e = adproxy.getAdInfo()
