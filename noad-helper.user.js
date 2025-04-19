@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.18
+// @version      2.1.19
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -832,9 +832,9 @@ class Core {
   }
 
   set selectedVip(v) {
-    $store.selectedVip = v
-    if (v) btnRestore.style.display = 'inline-block'
+    btnRestore.style.display = v ? 'inline-block' : 'none'
     if (v && v !== this.selectedVip) {
+      $store.selectedVip = v
       GM_setValue(`${this.name}:selected-vip`, v)
       this.logger.info(`设置本地存储 "${this.name}:selected-vip"="${v}"`)
     }
@@ -914,8 +914,8 @@ class Core {
 
     $emitter.on('replace-player', ({ name, url, href }) => {
       this.logger.info('Emitter[replace-player]', name, url, href)
-      this.replacePlayer(url, href)
       this.selectedVip = name
+      this.replacePlayer(url, href)
     })
 
     $emitter.on('position-change', (position, offsetY) => {
@@ -1116,7 +1116,6 @@ class Core {
       containerEl.innerHTML = ''
       containerEl.append(...bakPlayerEl.childNodes)
       bakPlayerEl.dataset.restorable = 'false'
-      btnRestore.style.display = 'none'
       this.selectedVip = ''
       this.controlAllVideo(false)
       this.autoVipFn = noop
