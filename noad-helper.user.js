@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.20
+// @version      2.1.21
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -49,6 +49,7 @@ const _DATA_ = {
       name: 'iqiyi',
       mode: 'handler',
       container: '#video',
+      autoDelay: 300,
       beforeEach() {
         if (!$store.engine) {
           const players = QiyiPlayerLoader._manager._players
@@ -99,7 +100,6 @@ const _DATA_ = {
       bindEvent() {
         const player = $store.player
         const engine = $store.engine
-        const { adproxy } = engine
         // 登录弹窗相关
         QySdk.Event.on('LoginDialogShown', (e) => {
           if (QyLoginInst.enabled && QyLoginInst.params.s3 !== 'mainframe') {
@@ -107,37 +107,40 @@ const _DATA_ = {
             QyLoginInst.openLoginByJs({ type: 'normal', disable: true })
           }
         })
-        const NTF_StatusChanged = 'statusChanged'
-        const NTF_AD_BLOCK = 'adblock'
-        const NTF_Recharge = 'recharge'
-        engine.on(NTF_StatusChanged, (e) => {
-          $logger.info(`Player[${NTF_StatusChanged}]`, e.state, e)
-          if (['adstartplay', 'adplaying', 'adpaused'].includes(e.state)) {
-            $logger.info(
-              `Player[${NTF_StatusChanged}]`,
-              e.state,
-              '自动监听执行跳过广告方法！'
-            )
-            this.skipAD()
-            this.autoVipFn()
-          }
-        })
-        engine.on(NTF_AD_BLOCK, (e) => {
-          $logger.info(`Player[${NTF_AD_BLOCK}]`, '广告拦截倒计时空屏', e)
-          if (typeof e === 'number') {
-            if (adproxy) {
-              adproxy._engineFire('adblock', '0')
-            } else {
-              $logger.error('skipAdblock', '跳过Adblock黑屏失败！')
+        // 绑定播放器引擎的监听事件
+        if (engine) {
+          const { adproxy } = engine
+          const NTF_StatusChanged = 'statusChanged'
+          const NTF_AD_BLOCK = 'adblock'
+          const NTF_Recharge = 'recharge'
+          engine.on(NTF_StatusChanged, (e) => {
+            $logger.info(`Player[${NTF_StatusChanged}]`, e.state, e)
+            if (['adstartplay', 'adplaying', 'adpaused'].includes(e.state)) {
+              $logger.info(
+                `Player[${NTF_StatusChanged}]`,
+                e.state,
+                '自动监听执行跳过广告方法！'
+              )
+              this.skipAD()
+              this.autoVipFn()
             }
+          })
+          engine.on(NTF_AD_BLOCK, (e) => {
+            $logger.info(`Player[${NTF_AD_BLOCK}]`, '广告拦截倒计时空屏', e)
+            if (typeof e === 'number') {
+              if (adproxy) {
+                adproxy._engineFire('adblock', '0')
+              } else {
+                $logger.error('skipAdblock', '跳过Adblock黑屏失败！')
+              }
+              this.autoVipFn()
+            }
+          })
+          engine.on(NTF_Recharge, (e) => {
+            $logger.info(`Player[${NTF_Recharge}]`, '提示会员充值弹窗', e)
             this.autoVipFn()
-          }
-        })
-        engine.on(NTF_Recharge, (e) => {
-          $logger.info(`Player[${NTF_Recharge}]`, '提示会员充值弹窗', e)
-          this.autoVipFn()
-        })
-
+          })
+        }
         const vipCoversBox = Utils.DOM.createElement('div', {
           id: 'vipCoversBox'
         })
@@ -795,6 +798,7 @@ class Core {
     this.transformHref = (site.transformHref ?? ((href) => href)).bind(this)
     this.requestHooker = site.requestHooker ?? {}
     this.autoVipFn = noop
+    this.autoDelay = site.autoDelay ?? 0
     this.urlWatchTimer = this.#createUrlWatchTimer()
     this.controlVideoTimer = this.#createControlVideoTimer()
     this.watchContainerTimer = this.#createWatchContainerTimer()
@@ -1086,20 +1090,23 @@ class Core {
       )
     }
     this.controlAllVideo(true)
-    const playerEl = this.createPlayerEl(url, href)
-    const bakPlayerEl = this.createBakPlayerEl()
-    if (_CONFIG_.playerDebug) {
-      bakPlayerEl.style.cssText =
-        'display:block;position:fixed;top:0;left:0;width:480px;height:270px;z-index:88888; opacity:0.5; overflow:hidden;'
-    }
-    if (bakPlayerEl.dataset.restorable === 'false') {
-      bakPlayerEl.append(...containerEl.childNodes)
-      bakPlayerEl.dataset.restorable = 'true'
-    } else {
-      containerEl.innerHTML = ''
-    }
-    containerEl.appendChild(playerEl)
-    this.logger.success('replacePlayer', '替换播放器')
+    setTimeout(() => {
+      const playerEl = this.createPlayerEl(url, href)
+      const bakPlayerEl = this.createBakPlayerEl()
+      if (_CONFIG_.playerDebug) {
+        bakPlayerEl.style.cssText =
+          'display:block;position:fixed;top:0;left:0;width:480px;height:270px;z-index:88888; opacity:0.5; overflow:hidden;'
+      }
+      if (bakPlayerEl.dataset.restorable === 'false') {
+        bakPlayerEl.append(...containerEl.childNodes)
+        bakPlayerEl.dataset.restorable = 'true'
+      } else {
+        containerEl.innerHTML = ''
+      }
+      containerEl.appendChild(playerEl)
+      const delayText = this.autoDelay ? `${this.autoDelay / 1000}秒` : '立刻'
+      this.logger.success('replacePlayer', `替换播放器(${delayText})`)
+    }, this.autoDelay)
   }
 
   restorePlayer() {
