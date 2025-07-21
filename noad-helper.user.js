@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.21
+// @version      2.1.22
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -28,7 +28,7 @@
 // @grant        GM_unregisterMenuCommand
 // ==/UserScript==
 
-/* global ajaxHooker mgtvPlayer adPlayer txv videoPlayer QiyiPlayerLoader QyLoginInst QySdk _player */
+/* global ajaxHooker mgtvPlayer adPlayer txv videoPlayer QiyiPlayerLoader QyLoginInst QySdk _player webPlay */
 /* ajaxHooker文档 https://bbs.tampermonkey.net.cn/thread-3284-1-1.html */
 const APP_NAME = 'NOAD_HELPER'
 const _CONFIG_ = {
@@ -51,51 +51,73 @@ const _DATA_ = {
       container: '#video',
       autoDelay: 300,
       beforeEach() {
-        if (!$store.engine) {
+        if ($store.engine) return
+        let player = undefined
+        // 旧版兼容
+        if (QiyiPlayerLoader) {
           const players = QiyiPlayerLoader._manager._players
-          const key = Object.keys(players)[0]
-          if (key) {
-            const player = players[key]
-            if (typeof player === 'object') {
-              $store.player = player
-              const engine = player._engine
-              if (engine) {
-                $store.engine = engine
-                $logger.info('beforeEach', '找到播放器引擎', engine)
-                try {
-                  const adManager = engine.playproxy.adManager
-                  if (adManager) {
-                    $logger.info('beforeEach', '发现adManager并劫持', adManager)
-                    adManager.handleBlackScreen = (e) => {
-                      $logger.info('hook', '阻止广告拦截倒计时空屏展示！', e)
-                      adManager.adUI.hideAllAdUI()
-                    }
-                    // adManager.updateAdInfo = () => {
-                    //   $logger.info('hook', '劫持广告信息更新方法')
-                    //   adManager.firstUpdateAdInfo = true
-                    //   adManager.currentAd = null
-                    // }
-                    const adLoad = adManager.adLoad.bind(adManager)
-                    adManager._adApi._load = adManager.adLoad = async (e) => {
-                      $logger.info('hook', '劫持广告加载方法', e)
-                      adManager.adUI.hideAllAdUI()
-                      if (Array.isArray(e)) {
-                        e.forEach((item) => {
-                          if (typeof item === 'object') item.duration = 0
-                        })
-                        adLoad(e.slice(0, 1))
-                      }
-                    }
-                  }
-                } catch (error) {
-                  $logger.error('beforeEach', error)
-                }
-                return
-              }
-            }
-          }
-          $logger.info('beforeEach', '未找到播放器引擎')
+          const firstKey = Object.keys(players)[0]
+          if (firstKey) player = players[firstKey]
         }
+        // 新版处理
+        if (!player && webPlay && webPlay.wonder) {
+          player = webPlay.wonder._player
+        }
+        $logger.info('beforeEach', player)
+        if (typeof player === 'object') {
+          $store.player = player
+          const engine = player._engine
+          if (engine) {
+            $store.engine = engine
+            $logger.info('beforeEach', '找到播放器引擎', engine)
+            try {
+              const adManager = engine.playproxy.adManager
+              if (adManager) {
+                $logger.info('beforeEach', '发现adManager并劫持', adManager)
+                adManager.handleBlackScreen = (e) => {
+                  $logger.info('hook', '阻止广告拦截倒计时空屏展示！', e)
+                  adManager.adUI.hideAllAdUI()
+                }
+                // adManager.updateAdInfo = () => {
+                //   $logger.info('hook', '劫持广告信息更新方法')
+                //   adManager.firstUpdateAdInfo = true
+                //   adManager.currentAd = null
+                // }
+                const adLoad = adManager.adLoad.bind(adManager)
+                adManager._adApi._load = adManager.adLoad = async (e) => {
+                  $logger.info('hook', '劫持广告加载方法', e)
+                  adManager.adUI.hideAllAdUI()
+                  if (Array.isArray(e)) {
+                    e.forEach((item) => {
+                      if (typeof item === 'object') item.duration = 0
+                    })
+                    adLoad(e.slice(0, 1))
+                  }
+                }
+              }
+            } catch (error) {
+              $logger.error('beforeEach', error)
+            }
+            return
+          }
+        }
+        $logger.info('beforeEach', '未找到播放器引擎')
+        // 重试
+        if ($store.engineRetry) {
+          if ($store.engineRetry >= 3) {
+            $logger.info('beforeEach', '多次未找到播放器引擎(停止)')
+            return
+          }
+          $store.engineRetry++
+        } else {
+          $store.engineRetry = 1
+        }
+        $logger.info(
+          'beforeEach',
+          '0.5秒后再尝试寻找播放器引擎',
+          `(Retry:${$store.engineRetry})`
+        )
+        setTimeout(this.beforeEach, 500)
       },
       bindEvent() {
         const player = $store.player
