@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.22
+// @version      2.1.23
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -62,6 +62,12 @@ const _DATA_ = {
         // 新版处理
         if (!player && webPlay && webPlay.wonder) {
           player = webPlay.wonder._player
+          if (
+            typeof player === 'object' &&
+            typeof player._playProxy === 'object'
+          ) {
+            $store.playproxy = player._playProxy
+          }
         }
         $logger.info('beforeEach', player)
         if (typeof player === 'object') {
@@ -121,6 +127,7 @@ const _DATA_ = {
       },
       bindEvent() {
         const player = $store.player
+        const playproxy = $store.playproxy
         const engine = $store.engine
         // 登录弹窗相关
         QySdk.Event.on('LoginDialogShown', (e) => {
@@ -129,6 +136,7 @@ const _DATA_ = {
             QyLoginInst.openLoginByJs({ type: 'normal', disable: true })
           }
         })
+        if (playproxy) setTimeout(this.skipAD, 1000)
         // 绑定播放器引擎的监听事件
         if (engine) {
           const { adproxy } = engine
@@ -171,6 +179,13 @@ const _DATA_ = {
       },
       skipAD: () => {
         const player = $store.player
+        /* 临时处理跳过广告功能，后续要去除旧代码 */
+        if ($store.playproxy && $store.playproxy._adManager) {
+          $logger.info('skipAD', '发现adManager，尝试跳过广告……')
+          $store.playproxy._adManager.skipAd(true)
+          return
+        }
+        // ========= END
         const engine = $store.engine || {}
         const { adproxy, playproxy } = engine
         const adManager = playproxy.adManager || {}
