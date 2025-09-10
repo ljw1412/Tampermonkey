@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.23
+// @version      2.1.24
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -221,8 +221,7 @@ const _DATA_ = {
         }
       },
       webFullscreen: () => {
-        const player = $store.player
-        if (player) player._view.webfullscreen.toggle({ isManual: true })
+        document.querySelector('[class*="videofullBtn"]').click()
       },
       beforeReplace() {
         const player = $store.player
