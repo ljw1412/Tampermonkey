@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.24
+// @version      2.1.25
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -258,7 +258,7 @@ const _DATA_ = {
           .getPlugin('MgAdPlugin')
           .adSDK.eventBus.addListener('AD_WILL_SHOW', (e) => {
             $logger.info('AD_WILL_SHOW', e)
-            this.skipAD()
+            setTimeout(this.skipAD, 0)
           })
       },
       skipAD() {
