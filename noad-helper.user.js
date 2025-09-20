@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.25
+// @version      2.1.26
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -32,7 +32,7 @@
 /* ajaxHooker文档 https://bbs.tampermonkey.net.cn/thread-3284-1-1.html */
 const APP_NAME = 'NOAD_HELPER'
 const _CONFIG_ = {
-  debug: true,
+  debug: false,
   playerDebug: false,
   showVipBtn: true,
   position: 'br', // 可选项'tl','tr','bl','br'
@@ -93,12 +93,49 @@ const _DATA_ = {
             QyLoginInst.openLoginByJs({ type: 'normal', disable: true })
           }
         })
-        if (playproxy) setTimeout(this.skipAD, 1000)
         const vipCoversBox = Utils.DOM.createElement('div', {
           id: 'vipCoversBox'
         })
         vipCoversBox.style.cssText = 'display: none;'
         document.body.appendChild(vipCoversBox)
+        // 劫持状态设置事件
+        let isSkipped = false
+        const that = this
+        if (player) {
+          $logger.info('bindEvent', '劫持播放器状态设置事件')
+          const setState = player._view.setState.bind(player._view)
+          player._view.setState = function (e, t) {
+            $logger.debug('Hooked[setState]', ...arguments)
+            if (typeof e === 'object') {
+              if (typeof e.showBlackScreen === 'object') {
+                const { flag, time } = e.showBlackScreen
+                if (flag && time == 45) {
+                  playproxy._adManager.startPlayMovie()
+                  $logger.info('BlackScreen', '尝试强制跳过广告错误的黑屏')
+                }
+                e.showBlackScreen.flag = false
+              }
+            }
+            setState(e, t)
+          }
+          const playInfoUpdate = player._PCBridge.playInfo.update.bind(
+            player._PCBridge.playInfo
+          )
+          player._PCBridge.playInfo.update = function (e) {
+            $logger.debug('Hooked[playInfo.update]', e)
+            if (typeof e === 'object' && e.playStatus === 'adStartPlay') {
+              setTimeout(that.skipAD, 300)
+              isSkipped = true
+            }
+            playInfoUpdate(e)
+          }
+        }
+        // 兜底跳过事件
+        if (!isSkipped && playproxy) {
+          setTimeout(() => {
+            if (!isSkipped) this.skipAD()
+          }, 1000)
+        }
       },
       skipAD: () => {
         const player = $store.player
@@ -522,7 +559,8 @@ class Logger {
       log: this.#buildTitle('信息', '#409EFF'),
       success: this.#buildTitle('成功', '#00b42a'),
       error: this.#buildTitle('错误', '#F56C6C'),
-      warning: this.#buildTitle('警告', '#f5a623')
+      warning: this.#buildTitle('警告', '#f5a623'),
+      debug: this.#buildTitle('调试', '#ff5722')
     }
   }
 
@@ -561,6 +599,10 @@ class Logger {
 
   warning(...args) {
     console.log(...this.#titles.warning, ...args)
+  }
+
+  debug(...args) {
+    _CONFIG_.debug && console.log(...this.#titles.debug, ...args)
   }
 }
 
