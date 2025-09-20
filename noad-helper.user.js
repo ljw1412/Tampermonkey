@@ -51,84 +51,41 @@ const _DATA_ = {
       container: '#video',
       autoDelay: 300,
       beforeEach() {
-        if ($store.engine) return
+        if ($store.player) return
         let player = undefined
-        // 旧版兼容
-        if (QiyiPlayerLoader) {
-          const players = QiyiPlayerLoader._manager._players
-          const firstKey = Object.keys(players)[0]
-          if (firstKey) player = players[firstKey]
-        }
-        // 新版处理
-        if (!player && webPlay && webPlay.wonder) {
+        if (webPlay && webPlay.wonder) {
+          $store.wonder = webPlay.wonder
           player = webPlay.wonder._player
-          if (
-            typeof player === 'object' &&
-            typeof player._playProxy === 'object'
-          ) {
-            $store.playproxy = player._playProxy
-          }
         }
-        $logger.info('beforeEach', player)
+        $logger.info('beforeEach player:', player)
         if (typeof player === 'object') {
           $store.player = player
-          const engine = player._engine
-          if (engine) {
-            $store.engine = engine
-            $logger.info('beforeEach', '找到播放器引擎', engine)
-            try {
-              const adManager = engine.playproxy.adManager
-              if (adManager) {
-                $logger.info('beforeEach', '发现adManager并劫持', adManager)
-                adManager.handleBlackScreen = (e) => {
-                  $logger.info('hook', '阻止广告拦截倒计时空屏展示！', e)
-                  adManager.adUI.hideAllAdUI()
-                }
-                // adManager.updateAdInfo = () => {
-                //   $logger.info('hook', '劫持广告信息更新方法')
-                //   adManager.firstUpdateAdInfo = true
-                //   adManager.currentAd = null
-                // }
-                const adLoad = adManager.adLoad.bind(adManager)
-                adManager._adApi._load = adManager.adLoad = async (e) => {
-                  $logger.info('hook', '劫持广告加载方法', e)
-                  adManager.adUI.hideAllAdUI()
-                  if (Array.isArray(e)) {
-                    e.forEach((item) => {
-                      if (typeof item === 'object') item.duration = 0
-                    })
-                    adLoad(e.slice(0, 1))
-                  }
-                }
-              }
-            } catch (error) {
-              $logger.error('beforeEach', error)
-            }
-            return
+          if (typeof player._playProxy === 'object') {
+            $store.playproxy = player._playProxy
           }
-        }
-        $logger.info('beforeEach', '未找到播放器引擎')
-        // 重试
-        if ($store.engineRetry) {
-          if ($store.engineRetry >= 3) {
-            $logger.info('beforeEach', '多次未找到播放器引擎(停止)')
-            return
-          }
-          $store.engineRetry++
+          return
         } else {
-          $store.engineRetry = 1
+          // 重试
+          if ($store.beforeEachRetry) {
+            if ($store.beforeEachRetry >= 3) {
+              $logger.info('beforeEach', '多次未找到播放器对象(停止)')
+              return
+            }
+            $store.beforeEachRetry++
+          } else {
+            $store.beforeEachRetry = 1
+          }
+          $logger.info(
+            'beforeEach',
+            '0.5秒后再尝试寻找播放器对象',
+            `(Retry:${$store.beforeEachRetry})`
+          )
+          setTimeout(this.beforeEach, 500)
         }
-        $logger.info(
-          'beforeEach',
-          '0.5秒后再尝试寻找播放器引擎',
-          `(Retry:${$store.engineRetry})`
-        )
-        setTimeout(this.beforeEach, 500)
       },
       bindEvent() {
         const player = $store.player
         const playproxy = $store.playproxy
-        const engine = $store.engine
         // 登录弹窗相关
         QySdk.Event.on('LoginDialogShown', (e) => {
           if (QyLoginInst.enabled && QyLoginInst.params.s3 !== 'mainframe') {
@@ -137,40 +94,6 @@ const _DATA_ = {
           }
         })
         if (playproxy) setTimeout(this.skipAD, 1000)
-        // 绑定播放器引擎的监听事件
-        if (engine) {
-          const { adproxy } = engine
-          const NTF_StatusChanged = 'statusChanged'
-          const NTF_AD_BLOCK = 'adblock'
-          const NTF_Recharge = 'recharge'
-          engine.on(NTF_StatusChanged, (e) => {
-            $logger.info(`Player[${NTF_StatusChanged}]`, e.state, e)
-            if (['adstartplay', 'adplaying', 'adpaused'].includes(e.state)) {
-              $logger.info(
-                `Player[${NTF_StatusChanged}]`,
-                e.state,
-                '自动监听执行跳过广告方法！'
-              )
-              this.skipAD()
-              this.autoVipFn()
-            }
-          })
-          engine.on(NTF_AD_BLOCK, (e) => {
-            $logger.info(`Player[${NTF_AD_BLOCK}]`, '广告拦截倒计时空屏', e)
-            if (typeof e === 'number') {
-              if (adproxy) {
-                adproxy._engineFire('adblock', '0')
-              } else {
-                $logger.error('skipAdblock', '跳过Adblock黑屏失败！')
-              }
-              this.autoVipFn()
-            }
-          })
-          engine.on(NTF_Recharge, (e) => {
-            $logger.info(`Player[${NTF_Recharge}]`, '提示会员充值弹窗', e)
-            this.autoVipFn()
-          })
-        }
         const vipCoversBox = Utils.DOM.createElement('div', {
           id: 'vipCoversBox'
         })
@@ -179,43 +102,14 @@ const _DATA_ = {
       },
       skipAD: () => {
         const player = $store.player
-        /* 临时处理跳过广告功能，后续要去除旧代码 */
-        if ($store.playproxy && $store.playproxy._adManager) {
-          $logger.info('skipAD', '发现adManager，尝试跳过广告……')
-          $store.playproxy._adManager.skipAd(true)
-          return
-        }
-        // ========= END
-        const engine = $store.engine || {}
-        const { adproxy, playproxy } = engine
-        const adManager = playproxy.adManager || {}
-        const { adUI, currentAd, gapsMap } = adManager
+        const playproxy = $store.playproxy
         try {
-          if (adUI) {
-            $logger.info('skipAD', '发现adUI，尝试跳过广告……', currentAd)
-            if (gapsMap instanceof Map) {
-              ;['preroll', 'briefRoll'].forEach((key) => {
-                gapsMap.set(key, { list: [] })
-              })
-            }
-            if (currentAd) {
-              adUI.skipAd(currentAd.type)
-            }
-          } else if (adproxy) {
-            $logger.info('skipAD', '发现adproxy，尝试跳过广告……')
-            const e = adproxy.getAdInfo()
-            adproxy.adSDKFire('ad-click', {
-              id: e.id,
-              area: 'ad-skip'
-            })
-            if (playproxy) playproxy.abortAllAres(e.rollType)
-            adproxy.rollEnd({
-              rollType: e.rollType,
-              videoEventId: e.videoEventId
-            })
-          } else {
-            throw new Error('未找到控制广告的adUI和adproxy管理对象')
+          if (playproxy && playproxy._adManager) {
+            $logger.info('skipAD', '发现adManager，尝试跳过广告……')
+            playproxy._adManager.skipAd(true)
+            return
           }
+          throw new Error('未找到控制广告的adManager管理对象')
         } catch (error) {
           $logger.error('skipAD', '跳过广告失败！', error)
         }
@@ -1051,7 +945,10 @@ class Core {
         }
       }
     } else {
-      this.restorePlayer()
+      const bakPlayerEl = document.querySelector(`#${this.bakPlayerId}`)
+      if (bakPlayerEl && bakPlayerEl.dataset.restorable == 'true') {
+        this.restorePlayer()
+      }
     }
 
     if (this.mode === 'element') {
@@ -1096,7 +993,7 @@ class Core {
     return playerEl
   }
 
-  createBakPlayerEl() {
+  getBakPlayerEl() {
     let bakPlayerEl = document.querySelector(`#${this.bakPlayerId}`)
     if (!bakPlayerEl) {
       const createElement = Utils.DOM.createElement
@@ -1128,7 +1025,7 @@ class Core {
     this.controlAllVideo(true)
     setTimeout(() => {
       const playerEl = this.createPlayerEl(url, href)
-      const bakPlayerEl = this.createBakPlayerEl()
+      const bakPlayerEl = this.getBakPlayerEl()
       if (_CONFIG_.playerDebug) {
         bakPlayerEl.style.cssText =
           'display:block;position:fixed;top:0;left:0;width:480px;height:270px;z-index:88888; opacity:0.5; overflow:hidden;'
