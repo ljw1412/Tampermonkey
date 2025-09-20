@@ -189,12 +189,13 @@ const _DATA_ = {
           .getPlugin('MgAdPlugin')
           .adSDK.eventBus.addListener('AD_WILL_SHOW', (e) => {
             $logger.info('AD_WILL_SHOW', e)
-            setTimeout(this.skipAD, 0)
+            if (e.data.layer) setTimeout(this.skipAD, 0)
           })
       },
       skipAD() {
         const adPlugin = adPlayer.getPlugin('MgAdPlugin')
         if (adPlugin) {
+          $logger.info('skipAD', '发现adPlugin，尝试跳过广告……')
           // adPlugin.adSDK.eventBus.dispatch({ type: 'SKIP' })
           adPlugin.adSDK.reset()
           adPlugin.adSDK.eventBus.dispatch({ type: 'FRONT_AD_END' })
