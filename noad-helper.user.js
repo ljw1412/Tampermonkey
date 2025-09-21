@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.26
+// @version      2.1.27
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -384,19 +384,14 @@ const _DATA_ = {
         url: 'https://jx.xmflv.com/?url='
       },
       {
-        name: '云溪',
-        type: [1, 2],
-        url: 'https://jx.yparse.com/index.php?url='
-      },
-      {
         name: 'Player-JY',
         type: [1, 2],
         url: 'https://jx.playerjy.com/?url='
       },
       {
-        name: 'hls解析',
+        name: '夜幕',
         type: [1, 2],
-        url: 'https://jx.hls.one/?url='
+        url: 'https://www.yemu.xyz/?url='
       },
       {
         name: '973播放',
@@ -404,9 +399,34 @@ const _DATA_ = {
         url: 'https://jx.973973.xyz/?url='
       },
       {
+        name: '云溪',
+        type: [1, 2],
+        url: 'https://jx.yparse.com/index.php?url='
+      },
+      {
+        name: 'hls解析',
+        type: [1, 2],
+        url: 'https://jx.hls.one/?url='
+      },
+      {
+        name: '极速2',
+        type: [1, 2],
+        url: 'https://jx.2s0.cn/player/?url='
+      },
+      {
         name: 'm1907',
         type: [1, 2],
         url: 'https://im1907.top/?jx='
+      },
+      {
+        name: '七哥',
+        type: [1, 2],
+        url: 'https://jx.nnxv.cn/tv.php?url='
+      },
+      {
+        name: 'IK9',
+        type: [1, 2],
+        url: 'https://yparse.ik9.cc/index.php?url='
       },
       {
         name: '剖元',
@@ -424,11 +444,6 @@ const _DATA_ = {
         url: 'https://jx.xmflv.cc/?url='
       },
       {
-        name: '夜幕',
-        type: [1, 2],
-        url: 'https://www.yemu.xyz/?url='
-      },
-      {
         name: 'qianqi',
         type: [1, 2],
         url: 'https://api.qianqi.net/vip/?url='
@@ -437,16 +452,6 @@ const _DATA_ = {
         name: 'CK',
         type: [1, 2],
         url: 'https://www.ckplayer.vip/jiexi/?url='
-      },
-      {
-        name: '七哥',
-        type: [1, 2],
-        url: 'https://jx.nnxv.cn/tv.php?url='
-      },
-      {
-        name: 'IK9',
-        type: [1, 2],
-        url: 'https://yparse.ik9.cc/index.php?url='
       },
       {
         name: 'PM',
@@ -472,11 +477,6 @@ const _DATA_ = {
         name: '大米云',
         type: [1, 2],
         url: 'https://jx.dmflv.cc/?url='
-      },
-      {
-        name: '极速2',
-        type: [1, 2],
-        url: 'https://jx.2s0.cn/player/?url='
       },
       {
         name: '冰豆解析',
