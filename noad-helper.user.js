@@ -152,7 +152,24 @@ const _DATA_ = {
         }
       },
       webFullscreen: () => {
-        document.querySelector('[class*="videofullBtn"]').click()
+        const btnWebFull = document.querySelector(
+          '#video [class*="videofullBtn"]'
+        )
+        if (btnWebFull) {
+          btnWebFull.click()
+          $logger.info('webFullscreen', '点击原本播放器按钮实现页面全屏')
+        } else {
+          $logger.info('webFullscreen', '手动设置样式实现页面全屏')
+          const divHeader = document.querySelector(
+            '[class*="xplayer_root__"] > div:nth-child(1)'
+          )
+          if (divHeader) {
+            const isDisplay = divHeader.style.display === 'none' ? '' : 'none'
+            divHeader.style.display = isDisplay
+            const tvgEl = document.querySelector('#tvg')
+            if (tvgEl) tvgEl.style.display = isDisplay
+          }
+        }
       },
       beforeReplace() {
         const player = $store.player
