@@ -285,7 +285,7 @@ const _DATA_ = {
       name: 'qqVideo',
       mode: 'element',
       container: '#mod_player,#player,#player-container',
-      videoTarget: 'fake-iframe-video',
+      videoTarget: 'fake-iframe-video,video',
       // beforeEach() {
       //   // TODO: 待研究
       //   const vPlayerEl = document.querySelector('.player.container-player')
