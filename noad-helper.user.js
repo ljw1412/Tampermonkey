@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.28
+// @version      2.1.29
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -61,7 +61,7 @@ const _DATA_ = {
         if (typeof player === 'object') {
           $store.player = player
           if (typeof player._playProxy === 'object') {
-            $store.playproxy = player._playProxy
+            $store.playProxy = player._playProxy
           }
           return
         } else {
@@ -85,7 +85,7 @@ const _DATA_ = {
       },
       bindEvent() {
         const player = $store.player
-        const playproxy = $store.playproxy
+        const playProxy = $store.playProxy
         // 登录弹窗相关
         QySdk.Event.on('LoginDialogShown', (e) => {
           if (QyLoginInst.enabled && QyLoginInst.params.s3 !== 'mainframe') {
@@ -110,7 +110,7 @@ const _DATA_ = {
               if (typeof e.showBlackScreen === 'object') {
                 const { flag, time } = e.showBlackScreen
                 if (flag && time == 45) {
-                  playproxy._adManager.startPlayMovie()
+                  playProxy._adManager.startPlayMovie()
                   $logger.info('BlackScreen', '尝试强制跳过广告错误的黑屏')
                 }
                 e.showBlackScreen.flag = false
@@ -131,7 +131,7 @@ const _DATA_ = {
           }
         }
         // 兜底跳过事件
-        if (!isSkipped && playproxy) {
+        if (!isSkipped && playProxy) {
           setTimeout(() => {
             if (!isSkipped) this.skipAD()
           }, 1000)
@@ -139,11 +139,17 @@ const _DATA_ = {
       },
       skipAD: () => {
         const player = $store.player
-        const playproxy = $store.playproxy
+        const playProxy = $store.playProxy
         try {
-          if (playproxy && playproxy._adManager) {
+          playProxy._adManager.adList = []
+          playProxy._adManager._sdk.adMap = {}
+        } catch (error) {
+          $logger.error('skipAD', '清空广告数据失败！', error)
+        }
+        try {
+          if (playProxy && playProxy._adManager) {
             $logger.info('skipAD', '发现adManager，尝试跳过广告……')
-            playproxy._adManager.skipAd(true)
+            playProxy._adManager.skipAd(true)
             return
           }
           throw new Error('未找到控制广告的adManager管理对象')
