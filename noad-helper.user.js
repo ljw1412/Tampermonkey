@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.29
+// @version      2.1.30
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -382,9 +382,36 @@ const _DATA_ = {
     },
     'sohu.com': {
       name: 'sohu',
-      mode: 'element',
+      mode: 'handler',
       container: '#player .x-player,#playerWrap .x-player',
-      webFullscreen: () => {
+      async beforeEach() {
+        $logger.info('beforeEach', '测试')
+      },
+      bindEvent() {
+        $store.bindEventTimer = new Timer(
+          '绑定事件时间器(循环尝试)',
+          () => {
+            if (unsafeWindow._player) {
+              $logger.success('bindEvent', '找到了_player对象')
+              $store.player = unsafeWindow._player
+              $store.bindEventTimer.stop()
+              $logger.info('bindEvent', '劫持播放器广告加载后事件函数')
+              onAdLoaded = _player.onAdLoaded.bind(_player)
+              unsafeWindow._player.onAdLoaded = function (e) {
+                e.e = true
+                $logger.info('Hooked[onAdLoaded]', e)
+                onAdLoaded(e)
+              }
+            } else {
+              $logger.warning('bindEvent', '未找到_player对象')
+            }
+          },
+          100,
+          30
+        )
+        $store.bindEventTimer.start(true)
+      },
+      webFullscreen() {
         _player.ui.pageFsBtn.pageFsBtn.click()
       }
     },
