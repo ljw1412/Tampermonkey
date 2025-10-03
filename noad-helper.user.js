@@ -384,7 +384,7 @@ const _DATA_ = {
       name: 'sohu',
       mode: 'handler',
       container: '#player .x-player,#playerWrap .x-player',
-      async beforeEach() {
+      beforeEach() {
         $logger.info('beforeEach', '测试')
       },
       bindEvent() {
@@ -974,6 +974,7 @@ class Core {
     }
     this.menuIds = []
   }
+
   #registerMenuCommand() {
     const that = this
     const positionMap = { lt: '↖左上', lb: '↙左下', rt: '↗右上', rb: '↘右下' }
@@ -1006,6 +1007,32 @@ class Core {
     )
   }
 
+  #initAutoMode() {
+    if (!$store.selectedVip) $store.selectedVip = this.selectedVip
+    this.logger.info(
+      'init',
+      `当前选中解析站点名称：${$store.selectedVip || '无'}`
+    )
+
+    if ($store.selectedVip) {
+      let vipParser = _DATA_.VideoParser.findByName($store.selectedVip)
+      if (!vipParser) {
+        vipParser = _DATA_.VideoParser.list[0]
+        this.logger.warning('init', '未找到对应站点：', $store.selectedVip)
+        this.logger.info('init', '默认使用第一个站点解析器：', vipParser)
+      } else {
+        this.logger.success('init', '找到对应站点解析器：', vipParser)
+      }
+      this.autoVipFn = () => {
+        $emitter.emit('replace-player', {
+          name: vipParser.name,
+          url: vipParser.url,
+          href: window.location.href
+        })
+      }
+    }
+  }
+
   init() {
     this.logger.info(
       'init',
@@ -1016,29 +1043,7 @@ class Core {
     this.beforeEach()
 
     if (this.isAuto) {
-      if (!$store.selectedVip) $store.selectedVip = this.selectedVip
-      this.logger.info(
-        'init',
-        `当前选中解析站点名称：${$store.selectedVip || '无'}`
-      )
-
-      if ($store.selectedVip) {
-        let vipParser = _DATA_.VideoParser.findByName($store.selectedVip)
-        if (!vipParser) {
-          vipParser = _DATA_.VideoParser.list[0]
-          this.logger.warning('init', '未找到对应站点：', $store.selectedVip)
-          this.logger.info('init', '默认使用第一个站点解析器：', vipParser)
-        } else {
-          this.logger.success('init', '找到对应站点解析器：', vipParser)
-        }
-        this.autoVipFn = () => {
-          $emitter.emit('replace-player', {
-            name: vipParser.name,
-            url: vipParser.url,
-            href: window.location.href
-          })
-        }
-      }
+      this.#initAutoMode()
     } else {
       const bakPlayerEl = document.querySelector(`#${this.bakPlayerId}`)
       if (bakPlayerEl && bakPlayerEl.dataset.restorable == 'true') {
