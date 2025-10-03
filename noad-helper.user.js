@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.30
+// @version      2.1.31
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -129,6 +129,14 @@ const _DATA_ = {
             }
             playInfoUpdate(e)
           }
+          // 隐藏水印
+          setTimeout(() => {
+            const watermarkImg = document.querySelector('img[src*="watermark"]')
+            if (watermarkImg) {
+              watermarkImg.style.display = 'none'
+              $logger.success('尝试隐藏水印')
+            }
+          }, 500)
         }
         // 兜底跳过事件
         if (!isSkipped && playProxy) {
@@ -1033,14 +1041,18 @@ class Core {
     }
   }
 
-  init() {
+  async init() {
     this.logger.info(
       'init',
       `当前模式：${this.mode}`,
       `自动VIP: ${this.isAuto ? '开' : '关'}`
     )
 
-    this.beforeEach()
+    const allowNext = (await this.beforeEach()) ?? true
+    if (!allowNext) {
+      $logger.error('init', 'beforeEach失败，阻止后续初始化。')
+      return
+    }
 
     if (this.isAuto) {
       this.#initAutoMode()
