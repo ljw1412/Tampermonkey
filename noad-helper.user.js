@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.31
+// @version      2.1.32
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -50,54 +50,69 @@ const _DATA_ = {
       mode: 'handler',
       container: '#video',
       autoDelay: 300,
-      beforeEach() {
+      async beforeEach() {
         if ($store.player) return
-        let player = undefined
-        if (webPlay && webPlay.wonder) {
-          $store.wonder = webPlay.wonder
-          player = webPlay.wonder._player
-        }
-        $logger.info('beforeEach player:', player)
-        if (typeof player === 'object') {
-          $store.player = player
-          if (typeof player._playProxy === 'object') {
-            $store.playProxy = player._playProxy
-          }
-          return
-        } else {
-          // 重试
-          if ($store.beforeEachRetry) {
-            if ($store.beforeEachRetry >= 3) {
-              $logger.info('beforeEach', '多次未找到播放器对象(停止)')
-              return
-            }
-            $store.beforeEachRetry++
-          } else {
-            $store.beforeEachRetry = 1
-          }
-          $logger.info(
-            'beforeEach',
-            '0.5秒后再尝试寻找播放器对象',
-            `(Retry:${$store.beforeEachRetry})`
+        const MAX_CYCLES = 30
+        return new Promise((resolve, reject) => {
+          $store.beforeEachTimer = new Timer(
+            '寻找播放器对象时间器',
+            (i) => {
+              let player = undefined
+              if (webPlay && webPlay.wonder) {
+                $store.wonder = webPlay.wonder
+                player = webPlay.wonder._player
+                if (player && typeof player === 'object') {
+                  $store.player = player
+                  $logger.success('beforeEach', '找到了player对象', player)
+                  const playProxy = player._playProxy
+                  if (typeof playProxy === 'object') {
+                    $store.playProxy = playProxy
+                    $logger.success('beforeEach', '找到了playProxy', playProxy)
+                    $store.beforeEachTimer.stop()
+                    resolve(true)
+                    return
+                  }
+                }
+              }
+              let msgPrefix = '本次'
+              if (i >= MAX_CYCLES) {
+                resolve(false)
+                msgPrefix = '最终还是'
+              }
+              $logger.warning('beforeEach', msgPrefix + '未找到player对象')
+            },
+            100,
+            MAX_CYCLES
           )
-          setTimeout(this.beforeEach, 500)
-        }
+          $store.beforeEachTimer.start(true)
+        })
       },
       bindEvent() {
         const player = $store.player
         const playProxy = $store.playProxy
-        // 登录弹窗相关
-        QySdk.Event.on('LoginDialogShown', (e) => {
-          if (QyLoginInst.enabled && QyLoginInst.params.s3 !== 'mainframe') {
-            $logger.info('LoginDialogShown', e, '登录界面弹出，尝试关闭……')
-            QyLoginInst.openLoginByJs({ type: 'normal', disable: true })
+
+        setTimeout(() => {
+          // 登录弹窗相关
+          try {
+            QySdk.Event.on('LoginDialogShown', (e) => {
+              if (
+                QyLoginInst.enabled &&
+                QyLoginInst.params.s3 !== 'mainframe'
+              ) {
+                $logger.info('LoginDialogShown', e, '登录界面弹出，尝试关闭……')
+                QyLoginInst.openLoginByJs({ type: 'normal', disable: true })
+              }
+            })
+            const vipCoversBox = Utils.DOM.createElement('div', {
+              id: 'vipCoversBox'
+            })
+            vipCoversBox.style.cssText = 'display: none;'
+            document.body.appendChild(vipCoversBox)
+            $logger.success('bindEvent', '登录界面拦截事件添加成功！')
+          } catch (error) {
+            $logger.error('bindEvent', error)
           }
-        })
-        const vipCoversBox = Utils.DOM.createElement('div', {
-          id: 'vipCoversBox'
-        })
-        vipCoversBox.style.cssText = 'display: none;'
-        document.body.appendChild(vipCoversBox)
+        }, 1000)
         // 劫持状态设置事件
         let isSkipped = false
         const that = this
@@ -711,7 +726,7 @@ class Timer {
         this.logger.info(`[${count}/${this.cycles}]`, '循环中……')
         if (count >= this.cycles) this.stop()
       }
-      this.fn()
+      this.fn(count)
       count++
     }, this.delay)
     this.running = true
@@ -1062,14 +1077,17 @@ class Core {
         this.restorePlayer()
       }
     }
-
-    if (this.mode === 'element') {
-      this.watchContainerTimer.start()
-    }
-    if (this.mode === 'handler' && !this.listening) {
-      this.bindEvent()
-      this.listening = true
-      this.logger.info('init', '绑定播放器事件监听')
+    try {
+      if (this.mode === 'element') {
+        this.watchContainerTimer.start()
+      }
+      if (this.mode === 'handler' && !this.listening) {
+        this.bindEvent()
+        this.listening = true
+        this.logger.info('init', '绑定播放器事件监听')
+      }
+    } catch (error) {
+      $logger.error('init', error)
     }
   }
 
