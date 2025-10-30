@@ -32,7 +32,7 @@
 /* ajaxHooker文档 https://bbs.tampermonkey.net.cn/thread-3284-1-1.html */
 const APP_NAME = 'NOAD_HELPER'
 const _CONFIG_ = {
-  debug: false,
+  debug: true,
   playerDebug: false,
   showVipBtn: true,
   position: 'br', // 可选项'tl','tr','bl','br'
@@ -138,7 +138,10 @@ const _DATA_ = {
           )
           player._PCBridge.playInfo.update = function (e) {
             $logger.debug('Hooked[playInfo.update]', e)
-            if (typeof e === 'object' && e.playStatus === 'adStartPlay') {
+            if (
+              typeof e === 'object' &&
+              ['adStartPlay', 'adplaying'].includes(e.playStatus)
+            ) {
               setTimeout(that.skipAD, 300)
               isSkipped = true
             }
@@ -156,7 +159,10 @@ const _DATA_ = {
         // 兜底跳过事件
         if (!isSkipped && playProxy) {
           setTimeout(() => {
-            if (!isSkipped) this.skipAD()
+            if (!isSkipped) {
+              $logger.success('触发兜底跳过广告')
+              this.skipAD()
+            }
           }, 1000)
         }
       },
@@ -419,7 +425,7 @@ const _DATA_ = {
               $store.player = unsafeWindow._player
               $store.bindEventTimer.stop()
               $logger.info('bindEvent', '劫持播放器广告加载后事件函数')
-              onAdLoaded = _player.onAdLoaded.bind(_player)
+              const onAdLoaded = _player.onAdLoaded.bind(_player)
               unsafeWindow._player.onAdLoaded = function (e) {
                 e.e = true
                 $logger.info('Hooked[onAdLoaded]', e)
