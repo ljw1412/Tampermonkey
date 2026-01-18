@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.32
+// @version      2.1.33
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -336,8 +336,8 @@ const _DATA_ = {
     'v.qq.com': {
       name: 'qqVideo',
       mode: 'element',
-      container: '#mod_player,#player,#player-container',
-      videoTarget: 'fake-iframe-video,video',
+      container: '#mod_player,#player,#player-container,#main-player',
+      videoTag: 'fake-iframe-video,video',
       // beforeEach() {
       //   // TODO: 待研究
       //   const vPlayerEl = document.querySelector('.player.container-player')
@@ -850,7 +850,7 @@ class Core {
     this.beforeReplace = (site.beforeReplace ?? noop).bind(this)
     this.transformHref = (site.transformHref ?? ((href) => href)).bind(this)
     this.requestHooker = site.requestHooker ?? {}
-    this.videoTarget = site.videoTarget ?? 'video'
+    this.videoTag = site.videoTag ?? 'video'
     this.autoVipFn = noop
     this.autoDelay = site.autoDelay ?? 0
     this.urlWatchTimer = this.#createUrlWatchTimer()
@@ -939,7 +939,7 @@ class Core {
       'video节点控制计时器',
       () => {
         // 暂停并静音所有Video节点
-        document.querySelectorAll(this.videoTarget).forEach((videoEl) => {
+        document.querySelectorAll(this.videoTag).forEach((videoEl) => {
           videoEl.autoplay = false
           videoEl.pause()
           if (!videoEl.beforeVolume) {
