@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.33
+// @version      2.1.34
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -58,6 +58,7 @@ const _DATA_ = {
             '寻找播放器对象时间器',
             (i) => {
               let player = undefined
+              const { webPlay } = unsafeWindow
               if (webPlay && webPlay.wonder) {
                 $store.wonder = webPlay.wonder
                 player = webPlay.wonder._player
