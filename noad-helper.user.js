@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.34
+// @version      2.1.35
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -1527,7 +1527,7 @@ class View {
 .${paneItemClass}[data-active="true"]{ color: #e4a329; font-weight: bold; border-color: currentColor;}
 .${paneItemClass}:not([data-active="true"]):hover { color: #e1b86a; border-color: currentColor; }
 .${paneItemClass}:not([data-active="true"]):active { color: #e3ad4a; border-color: currentColor; }
-#${BASE_NAME}_player{ width: 100%; height: 100%; z-index: 999999; }
+#${BASE_NAME}_player{ width: 100%; height: 100%; z-index: 999999;  pointer-events: all; }
 #${BASE_NAME}_player[data-site='mgtv']{ position: absolute; top: 0; }
 #${BASE_NAME}_iframe{ border:none; width:100%; height:100%; }
     `)
