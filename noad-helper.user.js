@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.35
+// @version      2.1.36
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -470,11 +470,6 @@ const _DATA_ = {
         url: 'https://jx.playerjy.com/?url='
       },
       {
-        name: '夜幕',
-        type: [1, 2],
-        url: 'https://www.yemu.xyz/?url='
-      },
-      {
         name: '973播放',
         type: [1, 2],
         url: 'https://jx.973973.xyz/?url='
@@ -563,16 +558,6 @@ const _DATA_ = {
         name: '冰豆解析',
         type: [1, 2],
         url: 'https://bd.jx.cn/?url='
-      },
-      {
-        name: '8090',
-        type: [1, 2],
-        url: 'https://www.8090g.cn/?url='
-      },
-      {
-        name: '红狐解析',
-        type: [2],
-        url: 'https://rdfplayer.mrgaocloud.com/player/?url='
       }
     ],
     findByName(name) {
