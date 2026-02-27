@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.36
+// @version      2.1.37
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -196,14 +196,16 @@ const _DATA_ = {
           $logger.info('webFullscreen', '点击原本播放器按钮实现页面全屏')
         } else {
           $logger.info('webFullscreen', '手动设置样式实现页面全屏')
-          const divHeader = document.querySelector(
-            '[class*="xplayer_root__"] > div:nth-child(1)'
+          const headerDiv = document.querySelector('#navHeaderContainer > div')
+          if (headerDiv) {
+            headerDiv.style.display =
+              headerDiv.style.display === 'none' ? '' : 'none'
+          }
+          const tvgDiv = document.querySelector(
+            '[class*="xplayer_root__"] > #content #tvg'
           )
-          if (divHeader) {
-            const isDisplay = divHeader.style.display === 'none' ? '' : 'none'
-            divHeader.style.display = isDisplay
-            const tvgEl = document.querySelector('#tvg')
-            if (tvgEl) tvgEl.style.display = isDisplay
+          if (tvgDiv) {
+            tvgDiv.style.display = tvgDiv.style.display === 'none' ? '' : 'none'
           }
         }
       },
@@ -1477,7 +1479,7 @@ class View {
   display: none;
   flex-direction: column;
   width: 320px;
-  height: 324px;
+  height: 300px;
   cursor: initial;
   color: #fff;
   font-weight: initial;
