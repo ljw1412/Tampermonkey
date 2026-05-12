@@ -369,12 +369,16 @@ function createImageWarpper(index, total, imgUrl) {
 }
 
 function fix() {
+  const headerEl = document.querySelector('body>div.pl-0')
+  headerEl.classList.remove('pl-0')
+
   const pageClickAreaElList = document.querySelectorAll(
     'body > div[class*="z-[90]"][class*="fixed"]'
   )
   pageClickAreaElList.forEach((el) => {
     el.classList.replace('z-[90]', 'z-[89]')
   })
+
   const imageContainerEl = document.querySelector('#image-container')
   if (imageContainerEl) {
     const xclass = imageContainerEl.getAttribute(':class')
