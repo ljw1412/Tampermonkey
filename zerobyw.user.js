@@ -290,12 +290,10 @@ $cache.clearExpired()
     )
     $logger.success('处理后的图片地址列表', imgList)
     const total = imgList.length
-    ;[...imgList].reverse().forEach((imgUrl, index) => {
-      imageContainerEl.insertAdjacentHTML(
-        'afterbegin',
-        createImageWarpper(total - index - 1, total, imgUrl)
-      )
-    })
+    const imagesHTML = [...imgList]
+      .map((imgUrl, index) => createImageWarpper(index, total, imgUrl))
+      .join('\n')
+    imageContainerEl.insertAdjacentHTML('afterbegin', imagesHTML)
     readerData.totalPages = total + 1
     readerData.currentPage = 1
     // 隐藏登录提示框
