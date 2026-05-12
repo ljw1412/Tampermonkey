@@ -82,6 +82,74 @@ class Logger {
     isDebug && console.log(...this.#titles.debug, ...args)
   }
 }
+class Alert {
+  #el = null
+  #timer = null
+
+  constructor() {
+    this.#initDOM()
+  }
+
+  #initDOM() {
+    if (this.#el) return
+    const el = document.createElement('div')
+    el.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      background-color: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 4px;
+      font-size: 14px;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    `
+    el.style.display = 'none'
+    document.body.appendChild(el)
+    this.#el = el
+  }
+
+  #clearTimer() {
+    if (this.#timer) {
+      clearTimeout(this.#timer)
+      this.#timer = null
+    }
+  }
+
+  /**
+   * 显示提示框
+   * @param {string} text - 提示文本
+   * @param {number} [duration=3000] - 持续时间（毫秒），默认3秒
+   */
+  show(text, duration = 3000) {
+    if (!this.#el) this.#initDOM()
+
+    // 清除之前的定时器
+    this.#clearTimer()
+
+    this.#el.textContent = text
+    this.#el.style.display = 'block'
+    this.#el.style.opacity = '1'
+
+    // 设置新的定时器
+    this.#timer = setTimeout(() => {
+      this.hide()
+    }, duration)
+  }
+
+  /**
+   * 隐藏提示框
+   */
+  hide() {
+    if (this.#el) {
+      this.#el.style.display = 'none'
+    }
+    this.#clearTimer()
+  }
+}
 class CacheManager {
   /**
    * 构造器
@@ -162,6 +230,7 @@ class CacheManager {
 }
 
 const $logger = new Logger('zero搬运网-随便看')
+const $alert = new Alert()
 const $cache = new CacheManager()
 
 $cache.clearExpired()
@@ -182,6 +251,7 @@ $cache.clearExpired()
   const loginH3El = findElWithText('#image-container h3', '需要登录')
   const needLogin = !!loginH3El
   if (needLogin) {
+    $alert.show('发现需要鉴权章节，尝试解析！', 10 * 1000)
     $logger.warning('发现当前章节需要登录才能查看！')
     const cacheName = `kuid-${kuid}`
     let comic = $cache.get(cacheName)
@@ -199,8 +269,10 @@ $cache.clearExpired()
         comic = respJson.data
         $cache.set(cacheName, comic, 3 * 60 * 60)
         $logger.info(`缓存漫画数据(${cacheName} | ${3 * 60 * 60}s)`, comic)
+        $alert.show('获取漫画数据成功！', 3 * 1000)
       } catch (error) {
         $logger.error('请求漫画数据失败！', error)
+        $alert.show('获取漫画数据失败！', 5 * 1000)
       }
     }
     if (!comic) return
@@ -211,6 +283,7 @@ $cache.clearExpired()
     if (!currentChapter)
       return $logger.error(`未找到当前章节(zjid=${zjid})`, comic.zj)
     $logger.info('找到当前章节数据', currentChapter)
+    $alert.show('找到当前章节数据', 3 * 1000)
     const imgOrigin = location.origin.replace('www', 'tupa')
     const imgList = currentChapter.images.map(
       (path) => `${imgOrigin}/manhua/${manhuadir}/${path}`
@@ -240,6 +313,7 @@ $cache.clearExpired()
         .replace('getWrapperStyle(0)', `getWrapperStyle(${total})`)
     )
     $logger.success('当前章节可以随便看咯！')
+    $alert.show('当前章节可以随便看咯！', 3 * 1000)
   } else {
     $logger.success('当前章节可以正常观看！')
   }
