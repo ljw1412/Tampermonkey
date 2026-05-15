@@ -5,6 +5,7 @@
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/view/*
+// @match        https://www.manhuagui.com/comic/*/*.html
 // @require      https://unpkg.com/vue@3/dist/vue.global.prod.js
 // @grant        unsafeWindow
 // @grant        GM_addStyle
@@ -26,114 +27,6 @@ function formatTimestamp(timestamp) {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
-}
-
-// ============================================
-// 网站适配器函数
-// ============================================
-
-/**
- * 从再漫画网站提取数据
- * @returns {Object|null} 转换后的漫画数据，失败返回null
- */
-function extractDataFromZaimanhua() {
-  try {
-    // 使用 unsafeWindow 访问原网站的 window 对象
-    const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
-
-    // 检查是否有必要的数据
-    if (!win.__NUXT__ || !win.__NUXT__.data) {
-      console.error('[Zaimanhua适配器] 未找到 __NUXT__ 数据')
-      return null
-    }
-
-    const nuxtData = win.__NUXT__.data
-
-    // 提取漫画基本信息
-    const comicInfo = nuxtData.getCationDetails?.data?.comicInfo
-    if (!comicInfo) {
-      console.error('[Zaimanhua适配器] 未找到漫画信息')
-      return null
-    }
-
-    const manga = {
-      title: comicInfo.title || '未知标题',
-      author: comicInfo.authorsTagList
-        ?.map((author) => author.tagName)
-        .join('、'),
-      cover: comicInfo.cover,
-      description: comicInfo.description
-    }
-
-    // 提取当前章节信息
-    const chapterInfo = nuxtData.getChapters?.data?.chapterInfo
-    if (!chapterInfo) {
-      console.error('[Zaimanhua适配器] 未找到章节信息')
-      return null
-    }
-
-    const currentChapterId = chapterInfo.chapter_id
-    const currentChapterTitle = chapterInfo.title
-
-    // 构建当前章节对象
-    const current = {
-      id: currentChapterId,
-      name: currentChapterTitle,
-      url: win.location.href,
-      images: chapterInfo.page_url || []
-    }
-
-    // 提取章节列表
-    const chapterListData = comicInfo.chapterList?.[0]?.data || []
-
-    // 转换章节列表格式
-    const list = chapterListData.map((ch) => ({
-      id: ch.chapter_id,
-      name: ch.chapter_title,
-      url: `./${ch.chapter_id}`,
-      updateTime: formatTimestamp(ch.updatetime)
-    }))
-
-    // 按章节顺序排序（chapter_order 从小到大）
-    list.sort((a, b) => {
-      const orderA =
-        chapterListData.find((ch) => ch.chapter_id === a.id)?.chapter_order || 0
-      const orderB =
-        chapterListData.find((ch) => ch.chapter_id === b.id)?.chapter_order || 0
-      return orderA - orderB
-    })
-
-    // 找到当前章节在列表中的索引
-    const currentIndex = list.findIndex((ch) => ch.id === currentChapterId)
-
-    // 确定上一章和下一章
-    const previous = currentIndex > 0 ? list[currentIndex - 1] : null
-    const next = currentIndex < list.length - 1 ? list[currentIndex + 1] : null
-
-    // 构建完整的数据结构
-    const data = {
-      manga,
-      chapter: {
-        current,
-        previous,
-        next,
-        list
-      }
-    }
-
-    console.log('[Zaimanhua适配器] 数据提取成功:', {
-      manga: manga.title,
-      currentChapter: current.name,
-      totalChapters: list.length,
-      hasPrevious: !!previous,
-      hasNext: !!next
-    })
-
-    return data
-  } catch (error) {
-    console.error('[Zaimanhua适配器] 提取数据失败:', error)
-    return null
-  }
 }
 
 // ============================================
@@ -1015,7 +908,7 @@ function initVueApp() {
     template: `
       <div v-if="isVisible" class="manga-reader-container" :data-theme="theme">
         <!-- 关闭按钮 -->
-        <button class="vmr-close-btn" @click="closeReader" title="关闭">×</button>
+        <div class="vmr-close-btn" @click="closeReader" title="关闭">×</div>
 
         <!-- 提示框 -->
         <div class="vmr-toast" :class="{ show: toast.isVisible }">
@@ -1148,6 +1041,265 @@ function exposeGlobalAPI() {
 }
 
 // ============================================
+// 网站适配器函数
+// ============================================
+
+/**
+ * 从再漫画网站提取数据
+ * @returns {Object|null} 转换后的漫画数据，失败返回null
+ */
+function extractDataFromZaimanhua() {
+  try {
+    // 使用 unsafeWindow 访问原网站的 window 对象
+    const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
+
+    // 检查是否有必要的数据
+    if (!win.__NUXT__ || !win.__NUXT__.data) {
+      console.error('[再漫画适配器] 未找到 __NUXT__ 数据')
+      return null
+    }
+
+    const nuxtData = win.__NUXT__.data
+
+    // 提取漫画基本信息
+    const comicInfo = nuxtData.getCationDetails?.data?.comicInfo
+    if (!comicInfo) {
+      console.error('[再漫画适配器] 未找到漫画信息')
+      return null
+    }
+
+    const manga = {
+      title: comicInfo.title || '未知标题',
+      author: comicInfo.authorsTagList
+        ?.map((author) => author.tagName)
+        .join('、'),
+      cover: comicInfo.cover,
+      description: comicInfo.description
+    }
+
+    // 提取当前章节信息
+    const chapterInfo = nuxtData.getChapters?.data?.chapterInfo
+    if (!chapterInfo) {
+      console.error('[再漫画适配器] 未找到章节信息')
+      return null
+    }
+
+    const currentChapterId = chapterInfo.chapter_id
+    const currentChapterTitle = chapterInfo.title
+
+    // 构建当前章节对象
+    const current = {
+      id: currentChapterId,
+      name: currentChapterTitle,
+      url: win.location.href,
+      images: chapterInfo.page_url || []
+    }
+
+    // 提取章节列表
+    const chapterListData = comicInfo.chapterList?.[0]?.data || []
+
+    // 转换章节列表格式
+    const list = chapterListData.map((ch) => ({
+      id: ch.chapter_id,
+      name: ch.chapter_title,
+      url: `./${ch.chapter_id}`,
+      updateTime: formatTimestamp(ch.updatetime)
+    }))
+
+    // 按章节顺序排序（chapter_order 从小到大）
+    list.sort((a, b) => {
+      const orderA =
+        chapterListData.find((ch) => ch.chapter_id === a.id)?.chapter_order || 0
+      const orderB =
+        chapterListData.find((ch) => ch.chapter_id === b.id)?.chapter_order || 0
+      return orderA - orderB
+    })
+
+    // 找到当前章节在列表中的索引
+    const currentIndex = list.findIndex((ch) => ch.id === currentChapterId)
+
+    // 确定上一章和下一章
+    const previous = currentIndex > 0 ? list[currentIndex - 1] : null
+    const next = currentIndex < list.length - 1 ? list[currentIndex + 1] : null
+
+    // 构建完整的数据结构
+    const data = {
+      manga,
+      chapter: {
+        current,
+        previous,
+        next,
+        list
+      }
+    }
+
+    console.log('[再漫画适配器] 数据提取成功:', {
+      manga: manga.title,
+      currentChapter: current.name,
+      totalChapters: list.length,
+      hasPrevious: !!previous,
+      hasNext: !!next
+    })
+
+    return data
+  } catch (error) {
+    console.error('[再漫画适配器] 提取数据失败:', error)
+    return null
+  }
+}
+
+/**
+ * 从漫画柜网站提取数据
+ * @returns {Object|null} 转换后的漫画数据，失败返回null
+ */
+function extractDataFromManhuagui() {
+  const evalKeyword = 'window["\\x65\\x76\\x61\\x6c"]'
+
+  try {
+    // 查找包含漫画信息的脚本
+    const scriptElements = Array.from(document.querySelectorAll('script'))
+    const infoScriptElement = scriptElements.find((script) =>
+      script.innerText.includes(evalKeyword)
+    )
+
+    if (!infoScriptElement) {
+      console.error('[漫画柜适配器] 没有找到漫画信息脚本')
+      return null
+    }
+
+    // 执行脚本获取原始数据
+    const scriptContent = infoScriptElement.innerText.replace(evalKeyword, '')
+    const rawData = new Function('return ' + scriptContent)()
+
+    // 提取JSON部分
+    const jsonStart = rawData.indexOf('{')
+    const jsonEnd = rawData.lastIndexOf('}') + 1
+    const jsonString = rawData.substring(jsonStart, jsonEnd)
+    const chapterInfo = JSON.parse(jsonString)
+
+    // 获取页面变量
+    const pageVariables = unsafeWindow.pVars
+
+    if (!chapterInfo || !pageVariables) {
+      console.error('[漫画柜适配器] 缺少必要的数据')
+      return null
+    }
+
+    // 构建漫画基本信息
+    const mangaInfo = {
+      title: chapterInfo.bname || '未知标题',
+      author: '未知作者', // 漫画柜可能需要从其他位置获取作者信息
+      cover: chapterInfo.bpic
+        ? `https://cf.mhgui.com/cpic/h/${chapterInfo.bpic}`
+        : '',
+      description: ''
+    }
+
+    // 构建当前章节对象
+    const { cid, cname } = chapterInfo
+
+    // 构建完整的图片URL列表
+    const imageBaseUrl = pageVariables.manga.filePath
+    const images = chapterInfo.files.map((filename) => {
+      return `${imageBaseUrl}${filename}?e=${chapterInfo.sl.e}&m=${chapterInfo.sl.m}`
+    })
+
+    const currentChapter = {
+      id: cid,
+      name: cname,
+      url: window.location.href,
+      images: images
+    }
+
+    // 构建章节列表（需要从页面中获取所有章节信息）
+    // 注意：这里需要根据实际页面结构调整，暂时创建一个只包含当前章节的列表
+    const chapterList = [
+      {
+        id: cid,
+        name: cname,
+        url: window.location.href,
+        updateTime: ''
+      }
+    ]
+
+    // 尝试从DOM中提取章节列表（如果存在的话）
+    try {
+      const chapterLinks = document.querySelectorAll(
+        '.chapter-list a, .chapter a, [class*="chapter"] a'
+      )
+      if (chapterLinks.length > 0) {
+        const extractedChapters = []
+        chapterLinks.forEach((link, index) => {
+          const chapterName = link.textContent.trim()
+          const chapterUrl = link.href
+
+          if (chapterName && chapterUrl) {
+            // 从URL中提取章节ID
+            const urlMatch = chapterUrl.match(/\/comic\/(\d+)\/(\d+)/)
+            if (urlMatch) {
+              extractedChapters.push({
+                id: parseInt(urlMatch[2]),
+                name: chapterName,
+                url: chapterUrl,
+                updateTime: ''
+              })
+            }
+          }
+        })
+
+        if (extractedChapters.length > 0) {
+          chapterList.length = 0
+          chapterList.push(...extractedChapters)
+        }
+      }
+    } catch (error) {
+      console.warn('[漫画柜适配器] 提取章节列表失败:', error)
+    }
+
+    // 根据 prevId 和 nextId 确定上一章和下一章（直接组装，不依赖章节列表）
+    const previousChapter = chapterInfo.prevId
+      ? {
+          id: chapterInfo.prevId,
+          name: '上一章',
+          url: `./${chapterInfo.prevId}.html`
+        }
+      : null
+
+    const nextChapter = chapterInfo.nextId
+      ? {
+          id: chapterInfo.nextId,
+          name: '下一章',
+          url: `./${chapterInfo.nextId}.html`
+        }
+      : null
+
+    // 构建完整的数据结构
+    const mangaData = {
+      manga: mangaInfo,
+      chapter: {
+        current: currentChapter,
+        previous: previousChapter,
+        next: nextChapter,
+        list: chapterList
+      }
+    }
+
+    console.log('[漫画柜适配器] 数据提取成功:', {
+      manga: mangaInfo.title,
+      currentChapter: currentChapter.name,
+      totalChapters: chapterList.length,
+      totalPages: images.length,
+      hasPrevious: !!previousChapter,
+      hasNext: !!nextChapter
+    })
+
+    return mangaData
+  } catch (error) {
+    console.error('[漫画柜适配器] 提取数据失败:', error)
+    return null
+  }
+}
+// ============================================
 // 网站配置列表（模式化适配器）
 // ============================================
 
@@ -1157,6 +1309,12 @@ const WEBSITE_LIST = [
     host: 'zaimanhua.com',
     pathnameRegEx: /^\/view\//,
     extract: extractDataFromZaimanhua
+  },
+  {
+    name: '漫画柜',
+    host: 'manhuagui.com',
+    pathnameRegEx: /^\/comic\/\d+\/\d+.html/,
+    extract: extractDataFromManhuagui
   }
   // 未来添加新网站示例：
   // {
