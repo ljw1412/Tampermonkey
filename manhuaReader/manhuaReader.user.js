@@ -159,7 +159,7 @@ function injectStyles() {
     }
 
     .vmr-sidebar-header {
-      padding: 20px;
+      padding: 14px;
       background: linear-gradient(135deg, var(--vmr-gradient-start) 0%, var(--vmr-gradient-end) 100%);
       color: white;
     }
@@ -177,6 +177,7 @@ function injectStyles() {
     }
 
     .vmr-manga-author {
+      margin-top: 4px;
       font-size: 14px;
       opacity: 0.9;
     }
@@ -1151,6 +1152,8 @@ function extractDataFromZaimanhua() {
       return null
     }
 
+    manga.url = `${location.origin}/details/${chapterInfo.comic_id}`
+
     const currentChapterId = chapterInfo.chapter_id
     const currentChapterTitle = chapterInfo.title
 
@@ -1256,7 +1259,8 @@ async function extractDataFromManhuagui() {
       cover: chapterInfo.bpic
         ? `https://cf.mhgui.com/cpic/h/${chapterInfo.bpic}`
         : '',
-      description: ''
+      description: '',
+      url: '.'
     }
 
     // 构建当前章节对象
