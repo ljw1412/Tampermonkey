@@ -85,7 +85,7 @@
 
 ### 完整数据结构
 
-```javascript
+``javascript
 {
   manga: {
     title: "漫画标题",
@@ -132,6 +132,7 @@
 | author | string | 否 | 作者名称 |
 | cover | string | 否 | 封面图片 URL |
 | description | string | 否 | 漫画简介 |
+| url | string | 否 | 漫画详情页 URL，如果提供则侧边栏标题和工具栏面包屑中的标题显示为可点击链接 |
 
 #### chapter.current 对象
 | 字段 | 类型 | 必填 | 说明 |
@@ -167,12 +168,13 @@
 - `data` (Object): 符合上述数据结构的漫画数据对象
 
 **示例：**
-```javascript
+``javascript
 // 在浏览器控制台执行
 $setMangaData({
   manga: {
     title: "测试漫画",
-    author: "测试作者"
+    author: "测试作者",
+    url: "https://example.com/comic/123"  // 可选，提供后标题变为可点击链接
   },
   chapter: {
     current: {
@@ -233,7 +235,7 @@ $vm.toggleTheme()
 #### CSS 变量
 主题通过 `.manga-reader-container` 元素的 `data-theme` 属性控制：
 
-```css
+```
 /* 亮色主题（默认） */
 .manga-reader-container {
   --vmr-bg-primary: #f5f5f5;
@@ -253,7 +255,7 @@ $vm.toggleTheme()
 
 可以通过修改 CSS 变量来创建自定义主题：
 
-```javascript
+```
 // 在控制台执行
 const container = document.querySelector('.manga-reader-container')
 container.style.setProperty('--vmr-bg-primary', '#your-color')
@@ -276,7 +278,7 @@ container.style.setProperty('--vmr-bg-primary', '#your-color')
 
 #### 适配器结构
 
-```javascript
+```
 const WEBSITE_LIST = [
   {
     name: '网站名称',
@@ -289,7 +291,7 @@ const WEBSITE_LIST = [
 
 #### 数据提取函数
 
-```javascript
+```
 function extractDataFromSite() {
   try {
     // 1. 从页面提取原始数据
@@ -313,7 +315,7 @@ function extractDataFromSite() {
 
 #### 步骤 1：创建提取函数
 
-```javascript
+```
 function extractDataFromNewSite() {
   try {
     const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
@@ -363,7 +365,7 @@ function extractDataFromNewSite() {
 
 #### 步骤 2：注册适配器
 
-```javascript
+```
 const WEBSITE_LIST = [
   // ... 现有适配器
   {
@@ -379,7 +381,7 @@ const WEBSITE_LIST = [
 
 在脚本头部添加新的匹配规则：
 
-```javascript
+```
 // ==UserScript==
 // ... 其他配置
 // @match        https://newsite.com/manga/*
@@ -393,6 +395,40 @@ const WEBSITE_LIST = [
 - **路径**：/view/*
 - **数据来源**：`window.__NUXT__.data`
 - **特点**：使用 Nuxt.js SSR，数据在服务端渲染
+
+#### 漫画柜 (manhuagui.com)
+- **域名**：manhuagui.com
+- **路径**：/comic/{漫画ID}/{章节ID}.html
+- **数据来源**：页面脚本中的 `info` 对象和 `pVars` 变量
+- **特点**：
+  - 从加密脚本中提取章节信息（使用 eval 解密）
+  - 自动获取作者信息（从详情页 DOM 解析）
+  - 支持通过 prevId/nextId 直接导航上下章
+  - 异步加载完整章节列表（从详情页 HTML 解析）
+  - 图片 URL 带有时效性认证参数（e 和 m）
+- **数据结构**：
+  ```javascript
+  // info 对象包含：
+  {
+    bid: 漫画ID,
+    bname: 漫画名称,
+    bpic: 封面图片,
+    cid: 当前章节ID,
+    cname: 当前章节名称,
+    files: [图片文件名数组],
+    path: 图片路径,
+    prevId: 上一章ID (0表示没有),
+    nextId: 下一章ID (0表示没有),
+    sl: { e: 时间戳, m: 签名 }
+  }
+  
+  // pVars 对象包含：
+  {
+    manga: {
+      filePath: 图片基础URL
+    }
+  }
+  ```
 
 ## 💻 开发指南
 
@@ -499,6 +535,15 @@ $vm.toggleTheme()
 - ✨ 工具栏添加主题切换按钮
 - 🎨 优化所有 UI 元素支持主题切换
 - 📝 更新脚本版本号为 1.2.0
+
+### v1.1.1 (2026-05-15)
+- ✨ 新增漫画柜网站适配器支持
+- ✨ 实现从加密脚本中提取章节数据
+- ✨ 自动解析作者信息（从详情页 DOM）
+- ✨ 支持通过 prevId/nextId 直接导航上下章
+- ✨ 异步加载完整章节列表
+- 🔧 优化变量命名，提高代码可读性
+- 🐛 修复图片 URL 构建逻辑，支持时效性认证参数
 
 ### v1.1.0 (2026-05-15)
 - ✨ 重构 UI 布局为悬浮式设计

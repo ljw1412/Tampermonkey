@@ -5,6 +5,51 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.3.0] - 2026-05-15
+
+### ✨ 新增功能
+- 新增漫画柜网站适配器支持（manhuagui.com）
+- 实现从加密脚本中提取章节数据
+- 自动解析作者信息（从详情页 DOM 提取）
+- 支持通过 prevId/nextId 直接导航上下章
+- 异步加载完整章节列表（从详情页 HTML 解析）
+- manga 对象新增 url 属性，支持点击标题跳转到漫画详情页
+
+### 🔧 技术改进
+- 优化 extractDataFromManhuagui 函数变量命名
+  - `keyword` → `evalKeyword`
+  - `scripts` → `scriptElements`
+  - `infoScript` → `infoScriptElement`
+  - `text` → `rawData`
+  - `infoText` → `jsonString`
+  - `info` → `chapterInfo`
+  - `pVars` → `pageVariables`
+- 完善图片 URL 构建逻辑，支持时效性认证参数（e 和 m）
+- 使用 async/await 异步加载章节列表
+- 添加详细的日志输出便于调试
+- 侧边栏标题支持超链接显示（当 manga.url 存在时）
+
+### 📊 数据结构支持
+- 支持漫画柜特有的 info 对象结构
+  - bid, bname, bpic（漫画基本信息）
+  - cid, cname（章节信息）
+  - files（图片文件名数组）
+  - prevId, nextId（上下章ID，0表示边界）
+  - sl（认证参数：e时间戳, m签名）
+- 支持 pVars 对象中的图片基础路径
+- manga 对象新增可选的 url 字段
+
+### 🎨 样式优化
+- 侧边栏标题链接样式优化
+- 工具栏面包屑链接样式优化
+- 链接悬停效果（下划线和颜色变化）
+- 保持与渐变背景的颜色对比度
+
+### 🐛 Bug 修复
+- 修复上下章导航依赖章节列表的问题
+- 修复图片 URL 拼接错误
+- 优化错误处理机制
+
 ## [1.2.0] - 2026-05-15
 
 ### ✨ 新增功能

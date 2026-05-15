@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vue漫画阅读器
 // @namespace    http://tampermonkey.net/
-// @version      1.2.0
+// @version      1.3.0
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/view/*
@@ -168,6 +168,12 @@ function injectStyles() {
       font-size: 18px;
       font-weight: bold;
       margin-bottom: 8px;
+      color: inherit;
+      text-decoration: none;
+    }
+
+    a.vmr-manga-title:hover {
+      text-decoration: underline;
     }
 
     .vmr-manga-author {
@@ -328,6 +334,17 @@ function injectStyles() {
       gap: 8px;
       font-size: 14px;
       color: var(--vmr-text-primary);
+    }
+
+    .vmr-breadcrumb a {
+      color: var(--vmr-text-primary);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .vmr-breadcrumb a:hover {
+      color: var(--vmr-active-bg);
+      text-decoration: underline;
     }
 
     .vmr-breadcrumb-separator {
@@ -941,7 +958,8 @@ function initVueApp() {
         <!-- 侧边栏 -->
         <div class="vmr-sidebar" :class="{ show: isUIVisible && isSidebarVisible }">
           <div class="vmr-sidebar-header">
-            <div class="vmr-manga-title">{{ manga?.title || '未加载漫画' }}</div>
+            <a v-if="manga?.url" class="vmr-manga-title" :href="manga.url" target="_blank" rel="noopener noreferrer">{{ manga?.title || '未加载漫画' }}</a>
+            <div v-else class="vmr-manga-title">{{ manga?.title || '未加载漫画' }}</div>
             <div class="vmr-manga-author">{{ manga?.author || '未知作者' }}</div>
           </div>
 
@@ -996,7 +1014,8 @@ function initVueApp() {
               {{ isSidebarVisible ? '◀' : '▶' }}
             </button>
             <div v-if="!isSidebarVisible" class="vmr-breadcrumb">
-              <span>{{ manga?.title || '未加载漫画' }}</span>
+              <a v-if="manga?.url" :href="manga.url" target="_blank" rel="noopener noreferrer">{{ manga?.title || '未加载漫画' }}</a>
+              <span v-else>{{ manga?.title || '未加载漫画' }}</span>
               <span class="vmr-breadcrumb-separator">/</span>
               <span>{{ chapter.current?.name || '未选择章节' }}</span>
             </div>
