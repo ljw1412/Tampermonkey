@@ -149,11 +149,11 @@ function injectStyles() {
       box-shadow: 2px 0 8px rgba(0,0,0,0.1);
       z-index: 1000;
       transform: translateX(-100%);
-      transition: transform 0.2s ease-in-out;
-      opacity: 1;
+      transition: all 0.3s ease-in-out;
+      opacity: 0;
     }
 
-    .vmr-sidebar.show {
+    .vmr-sidebar.vmr-show {
       transform: translateX(0);
       opacity: 1;
     }
@@ -289,12 +289,12 @@ function injectStyles() {
       align-items: center;
       z-index: 999;
       transform: translateY(-100%);
-      transition: transform 0.2s ease-in-out, padding-left 0.2s ease-in-out;
+      transition: all 0.3s ease-in-out;
       backdrop-filter: blur(4px);
-      opacity: 1;
+      opacity: 0;
     }
 
-    .vmr-toolbar.show {
+    .vmr-toolbar.vmr-show {
       transform: translateY(0);
       opacity: 1;
     }
@@ -351,31 +351,58 @@ function injectStyles() {
       color: var(--vmr-text-muted);
     }
 
-    .page-in-total {
+    /* 右下角功能区 */
+    .vmr-bottom-right-panel {
+      position: fixed;
+      bottom: 8px;
+      right: 8px;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: end;
+      gap: 8px;
+      z-index: 998;
+    }
+
+    .vmr-bottom-right-panel > .vmr-show {
+      transform: translateX(0);
+      opacity: 1;
+    }
+
+    .vmr-pagination-status {
       padding: 4px 12px;
       font-size: 13px;
       line-height: 1;
       color: var(--vmr-text-primary);
+      background: var(--vmr-bg-overlay);
+      backdrop-filter: blur(4px);
       border: 1px solid var(--vmr-button-border);
       border-radius: 24px;
       user-select: none;
+      white-space: nowrap;
     }
 
-    .vmr-toolbar-right {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .vmr-toolbar-right .btn-theme-toggle {
-      display:inline-flex;
+    .vmr-btn-theme-toggle {
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 30px;
-      height: 30px;
+      width: 36px;
+      height: 36px;
       padding: 0;
-      margin-right: 36px;
       border-radius: 50%;
+      background: var(--vmr-button-bg);
+      border: 1px solid var(--vmr-button-border);
+      cursor: pointer;
+      font-size: 18px;
+      color: var(--vmr-text-primary);
+      transform: translateX(100%);
+      transition: all 0.3s ease-in-out;
+      opacity: 0;
+    }
+
+    .vmr-btn-theme-toggle:hover {
+      background: var(--vmr-button-hover-bg);
+      border-color: var(--vmr-button-hover-border);
+      transform: scale(1.1);
     }
 
     /* 主内容区 - 三等分点击区域 */
@@ -444,6 +471,7 @@ function injectStyles() {
       width: auto;
       height: 100%;
       display: block;
+      object-fit: contain;
     }
 
     /* 空状态 */
@@ -482,7 +510,7 @@ function injectStyles() {
       opacity: 0;
     }
 
-    .vmr-toast.show {
+    .vmr-toast.vmr-show {
       opacity: 1;
     }
 
@@ -503,7 +531,7 @@ function injectStyles() {
       transition: all 0.3s;
     }
 
-    .vmr-confirm-dialog.show {
+    .vmr-confirm-dialog.vmr-show {
       opacity: 1;
       visibility: visible;
     }
@@ -519,7 +547,7 @@ function injectStyles() {
       transition: transform 0.3s;
     }
 
-    .vmr-confirm-dialog.show .vmr-confirm-box {
+    .vmr-confirm-dialog.vmr-show .vmr-confirm-box {
       transform: scale(1);
     }
 
@@ -939,12 +967,12 @@ function initVueApp() {
         <div class="vmr-close-btn" @click="closeReader" title="关闭">×</div>
 
         <!-- 提示框 -->
-        <div class="vmr-toast" :class="{ show: toast.isVisible }">
+        <div class="vmr-toast" :class="{ 'vmr-show': toast.isVisible }">
           {{ toast.message }}
         </div>
 
         <!-- 确认对话框 -->
-        <div class="vmr-confirm-dialog" :class="{ show: confirmDialog.isVisible }" @click.self="handleCancel">
+        <div class="vmr-confirm-dialog" :class="{ 'vmr-show': confirmDialog.isVisible }" @click.self="handleCancel">
           <div class="vmr-confirm-box">
             <div class="vmr-confirm-title">{{ confirmDialog.title }}</div>
             <div class="vmr-confirm-message">{{ confirmDialog.message }}</div>
@@ -956,7 +984,7 @@ function initVueApp() {
         </div>
 
         <!-- 侧边栏 -->
-        <div class="vmr-sidebar" :class="{ show: isUIVisible && isSidebarVisible }">
+        <div class="vmr-sidebar" :class="{ 'vmr-show': isUIVisible && isSidebarVisible }">
           <div class="vmr-sidebar-header">
             <a v-if="manga?.url" class="vmr-manga-title" :href="manga.url" target="_blank" rel="noopener noreferrer">{{ manga?.title || '未加载漫画' }}</a>
             <div v-else class="vmr-manga-title">{{ manga?.title || '未加载漫画' }}</div>
@@ -1008,7 +1036,7 @@ function initVueApp() {
         </div>
 
         <!-- 工具栏 -->
-        <div class="vmr-toolbar" :class="{ show: isUIVisible, 'has-sidebar': isSidebarVisible }">
+        <div class="vmr-toolbar" :class="{ 'vmr-show': isUIVisible, 'has-sidebar': isSidebarVisible }">
           <div class="vmr-toolbar-left">
             <button @click="toggleSidebar" :title="isSidebarVisible ? '隐藏侧边栏' : '显示侧边栏'">
               {{ isSidebarVisible ? '◀' : '▶' }}
@@ -1019,15 +1047,16 @@ function initVueApp() {
               <span class="vmr-breadcrumb-separator">/</span>
               <span>{{ chapter.current?.name || '未选择章节' }}</span>
             </div>
-            <div class="page-in-total">
-              {{ currentPageIndex + 1 }} / {{ totalPages }}
-            </div>
           </div>
+        </div>
 
-          <div class="vmr-toolbar-right">
-            <button class="btn-theme-toggle" @click="toggleTheme" :title="theme === 'light' ? '切换到暗色主题' : '切换到亮色主题'">
-              {{ theme === 'light' ? '🌙' : '☀️' }}
-            </button>
+        <!-- 右下角功能区 -->
+        <div class="vmr-bottom-right-panel">
+          <div class="vmr-btn-theme-toggle" :class="{ 'vmr-show': isUIVisible }" @click="toggleTheme" :title="theme === 'light' ? '切换到暗色主题' : '切换到亮色主题'">
+            {{ theme === 'light' ? '🌙' : '☀️' }}
+          </div>
+          <div class="vmr-pagination-status">
+            {{ currentPageIndex + 1 }} / {{ totalPages }}
           </div>
         </div>
 
