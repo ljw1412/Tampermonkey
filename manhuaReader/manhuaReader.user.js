@@ -136,7 +136,7 @@ function injectStyles() {
     }
 
     /* 主题变量 - 亮色主题（默认） */
-    .manga-reader-container {
+    #vue-manga-reader {
       --vmr-bg-primary: #f5f5f5;
       --vmr-bg-secondary: #fff;
       --vmr-bg-overlay: rgba(255, 255, 255, 0.85);
@@ -715,6 +715,31 @@ function injectStyles() {
       transform: rotate(90deg);
     }
 
+    /* 打开按钮 */
+    .vmr-open-btn {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--vmr-close-btn-bg);
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      z-index: 999998;
+    }
+
+    .vmr-open-btn:hover {
+      background: var(--vmr-close-btn-hover);
+      font-size: 30px;
+    }
+
     /* 滚动条样式 */
     ::-webkit-scrollbar {
       width: 8px;
@@ -948,6 +973,10 @@ function initVueApp() {
         isVisible.value = false
       }
 
+      const openReader = () => {
+        isVisible.value = true
+      }
+
       const handleLeftClick = () => {
         if (isClickZoneLocked.value) return
         prevPage()
@@ -1035,6 +1064,7 @@ function initVueApp() {
         toggleToolbar,
         toggleTheme,
         closeReader,
+        openReader,
         handleLeftClick,
         handleCenterClick,
         handleRightClick,
@@ -1046,9 +1076,13 @@ function initVueApp() {
     },
 
     template: `
-      <div v-if="isVisible" class="manga-reader-container" :data-theme="theme">
-        <!-- 关闭按钮 -->
-        <div class="vmr-close-btn" @click="closeReader" title="关闭">×</div>
+        <!-- 打开按钮（阅读器关闭时显示） -->
+        <div v-if="!isVisible" class="vmr-open-btn" @click="openReader" title="打开阅读器">📖</div>
+
+        <!-- 阅读器容器 -->
+        <div v-if="isVisible" class="manga-reader-container" :data-theme="theme">
+          <!-- 关闭按钮 -->
+          <div class="vmr-close-btn" @click="closeReader" title="关闭">×</div>
 
         <!-- 提示框 -->
         <div class="vmr-toast" :class="{ 'vmr-show': toast.isVisible }">
