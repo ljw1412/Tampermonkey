@@ -39,6 +39,8 @@ function formatTimestamp(timestamp) {
 function injectStyles() {
   const styles = `
     #vue-manga-reader {
+      font-size: 12px;
+      line-height: 1;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     }
 
@@ -62,6 +64,7 @@ function injectStyles() {
       --vmr-button-hover-bg: #f5f5f5;
       --vmr-button-hover-border: #667eea;
       --vmr-button-hover-text: #667eea;
+      --vmr-disabled-color: #999;
       --vmr-disabled-bg: #ccc;
       --vmr-toast-bg: rgba(0, 0, 0, 0.8);
       --vmr-dialog-overlay: rgba(0, 0, 0, 0.5);
@@ -100,6 +103,7 @@ function injectStyles() {
       --vmr-button-hover-bg: #3d3d3d;
       --vmr-button-hover-border: #5568d3;
       --vmr-button-hover-text: #7c8ff5;
+      --vmr-disabled-color: #999;
       --vmr-disabled-bg: #555;
       --vmr-toast-bg: rgba(255, 255, 255, 0.9);
       --vmr-dialog-overlay: rgba(0, 0, 0, 0.7);
@@ -207,6 +211,7 @@ function injectStyles() {
     }
 
     .vmr-chapter-nav button:disabled {
+      color: var(--vmr-disabled-color);
       background: var(--vmr-disabled-bg);
       cursor: not-allowed;
       transform: none;
@@ -219,6 +224,7 @@ function injectStyles() {
       column-gap: 6px;
       row-gap: 6px;
       padding: 10px;
+      color: var(--vmr-text-primary);
       overflow-y: auto;
     }
 
@@ -245,6 +251,11 @@ function injectStyles() {
     .vmr-chapter-name {
       font-size: 14px;
       font-weight: 500;
+    }
+
+    .vmr-chapter-pagecount {
+      font-size: 12px;
+      opacity: 0.75;
     }
 
     .vmr-chapter-update-time {
@@ -936,7 +947,10 @@ function initVueApp() {
 
           <div class="vmr-chapter-info">
             <div class="vmr-current-chapter">
-              当前章节: {{ chapter.current?.name || '未选择' }}
+              当前: {{ chapter.current?.name || '未选择' }}
+              <span v-if="chapter.current?.pageCount" class="vmr-chapter-pagecount">
+                {{ chapter.current.pageCount }}P
+              </span>
             </div>
             <div class="vmr-chapter-nav">
               <button
@@ -962,7 +976,12 @@ function initVueApp() {
               :class="{ active: chapter.current?.id === ch.id }"
               @click="loadChapter(ch)"
             >
-              <div class="vmr-chapter-name">{{ ch.name }}</div>
+              <div class="vmr-chapter-name">
+              {{ ch.name }}
+              <span v-if="ch.pageCount" class="vmr-chapter-pagecount">
+                {{ ch.pageCount }}P
+              </span>
+               </div>
               <div class="vmr-chapter-update-time" v-if="ch.updateTime">
                 {{ ch.updateTime }}
               </div>
@@ -1094,6 +1113,7 @@ function extractDataFromZaimanhua() {
       url: win.location.href,
       images: chapterInfo.page_url || []
     }
+    current.pageCount = current.images.length
 
     // 提取章节列表
     const chapterListData = comicInfo.chapterList?.[0]?.data || []
@@ -1125,18 +1145,14 @@ function extractDataFromZaimanhua() {
     // 构建完整的数据结构
     const data = {
       manga,
-      chapter: {
-        current,
-        previous,
-        next,
-        list
-      }
+      chapter: { current, previous, next, list }
     }
 
     console.log('[再漫画适配器] 数据提取成功:', {
       manga: manga.title,
       currentChapter: current.name,
       totalChapters: list.length,
+      totalPages: current.images.length,
       hasPrevious: !!previous,
       hasNext: !!next
     })
@@ -1152,7 +1168,7 @@ function extractDataFromZaimanhua() {
  * 从漫画柜网站提取数据
  * @returns {Object|null} 转换后的漫画数据，失败返回null
  */
-function extractDataFromManhuagui() {
+async function extractDataFromManhuagui() {
   const evalKeyword = 'window["\\x65\\x76\\x61\\x6c"]'
 
   try {
@@ -1186,7 +1202,7 @@ function extractDataFromManhuagui() {
     }
 
     // 构建漫画基本信息
-    const mangaInfo = {
+    const manga = {
       title: chapterInfo.bname || '未知标题',
       author: '未知作者', // 漫画柜可能需要从其他位置获取作者信息
       cover: chapterInfo.bpic
@@ -1196,68 +1212,20 @@ function extractDataFromManhuagui() {
     }
 
     // 构建当前章节对象
-    const { cid, cname } = chapterInfo
+    const { cid, cname, len } = chapterInfo
 
-    // 构建完整的图片URL列表
-    const imageBaseUrl = pageVariables.manga.filePath
-    const images = chapterInfo.files.map((filename) => {
-      return `${imageBaseUrl}${filename}?e=${chapterInfo.sl.e}&m=${chapterInfo.sl.m}`
-    })
-
-    const currentChapter = {
-      id: cid,
+    const current = {
+      id: cid + '',
       name: cname,
       url: window.location.href,
-      images: images
-    }
-
-    // 构建章节列表（需要从页面中获取所有章节信息）
-    // 注意：这里需要根据实际页面结构调整，暂时创建一个只包含当前章节的列表
-    const chapterList = [
-      {
-        id: cid,
-        name: cname,
-        url: window.location.href,
-        updateTime: ''
-      }
-    ]
-
-    // 尝试从DOM中提取章节列表（如果存在的话）
-    try {
-      const chapterLinks = document.querySelectorAll(
-        '.chapter-list a, .chapter a, [class*="chapter"] a'
-      )
-      if (chapterLinks.length > 0) {
-        const extractedChapters = []
-        chapterLinks.forEach((link, index) => {
-          const chapterName = link.textContent.trim()
-          const chapterUrl = link.href
-
-          if (chapterName && chapterUrl) {
-            // 从URL中提取章节ID
-            const urlMatch = chapterUrl.match(/\/comic\/(\d+)\/(\d+)/)
-            if (urlMatch) {
-              extractedChapters.push({
-                id: parseInt(urlMatch[2]),
-                name: chapterName,
-                url: chapterUrl,
-                updateTime: ''
-              })
-            }
-          }
-        })
-
-        if (extractedChapters.length > 0) {
-          chapterList.length = 0
-          chapterList.push(...extractedChapters)
-        }
-      }
-    } catch (error) {
-      console.warn('[漫画柜适配器] 提取章节列表失败:', error)
+      images: chapterInfo.files.map((filename) => {
+        return `${pageVariables.manga.filePath}${filename}?e=${chapterInfo.sl.e}&m=${chapterInfo.sl.m}`
+      }),
+      pageCount: len
     }
 
     // 根据 prevId 和 nextId 确定上一章和下一章（直接组装，不依赖章节列表）
-    const previousChapter = chapterInfo.prevId
+    let previous = chapterInfo.prevId
       ? {
           id: chapterInfo.prevId,
           name: '上一章',
@@ -1265,7 +1233,7 @@ function extractDataFromManhuagui() {
         }
       : null
 
-    const nextChapter = chapterInfo.nextId
+    let next = chapterInfo.nextId
       ? {
           id: chapterInfo.nextId,
           name: '下一章',
@@ -1273,24 +1241,73 @@ function extractDataFromManhuagui() {
         }
       : null
 
+    // 构建章节列表（需要从页面中获取所有章节信息）
+    // 默认创建一个只包含当前章节的列表
+    const list = [current]
+
+    // 尝试从详情页DOM中提取章节列表
+    try {
+      console.log('[漫画柜适配器] 尝试从详情页中提取章节列表')
+      const resp = await fetch('.')
+      const htmlText = await resp.text()
+      const doc = new DOMParser().parseFromString(htmlText, 'text/html')
+      console.log('[漫画柜适配器] 详情页请求成功：', doc)
+      const authorLabelEl = Array.from(
+        doc.querySelectorAll('.book-detail .detail-list li span strong')
+      ).find((item) => item.innerText.includes('作者'))
+      if (authorLabelEl) {
+        const author = Array.from(authorLabelEl.parentElement.childNodes)
+          .filter((el) => el !== authorLabelEl)
+          .map((item) => item.textContent)
+          .join('、')
+        if (author) {
+          manga.author = author
+          console.log('[漫画柜适配器] 获取到作者', author)
+        }
+      }
+      const chapterListEls = Array.from(
+        doc.querySelectorAll('.chapter .chapter-list')
+      ).reverse()
+      const extractedChapters = chapterListEls
+        .map((clist) => Array.from(clist.querySelectorAll('ul')))
+        .flat()
+        .map((ul) => Array.from(ul.querySelectorAll('li a')).reverse())
+        .flat()
+        .map((item) => {
+          const url = item.href
+          const pageCount = parseInt(item.querySelector('i')?.innerText) || null
+          const idMatched = url.match(/\/comic\/\d+\/(\d+).html/)
+          const id = idMatched ? idMatched[1] : url
+          return { id, name: item.title, url, pageCount }
+        })
+      if (extractedChapters.length > 0) {
+        list.length = 0
+        list.push(...extractedChapters)
+        console.log('[漫画柜适配器] 章节信息获取成功', list)
+        // 找到当前章节在列表中的索引
+        const currentIndex = list.findIndex((ch) => ch.id === current.id)
+        // 更新上一章和下一章
+        const previous = currentIndex > 0 ? list[currentIndex - 1] : null
+        const next =
+          currentIndex < list.length - 1 ? list[currentIndex + 1] : null
+      }
+    } catch (error) {
+      console.warn('[漫画柜适配器] 提取章节列表失败:', error)
+    }
+
     // 构建完整的数据结构
     const mangaData = {
-      manga: mangaInfo,
-      chapter: {
-        current: currentChapter,
-        previous: previousChapter,
-        next: nextChapter,
-        list: chapterList
-      }
+      manga: manga,
+      chapter: { current, previous, next, list }
     }
 
     console.log('[漫画柜适配器] 数据提取成功:', {
-      manga: mangaInfo.title,
-      currentChapter: currentChapter.name,
-      totalChapters: chapterList.length,
-      totalPages: images.length,
-      hasPrevious: !!previousChapter,
-      hasNext: !!nextChapter
+      manga: manga.title,
+      currentChapter: current.name,
+      totalChapters: list.length,
+      totalPages: current.images.length,
+      hasPrevious: !!previous,
+      hasNext: !!next
     })
 
     return mangaData
@@ -1328,7 +1345,7 @@ const WEBSITE_LIST = [
 /**
  * 从当前网站加载漫画数据
  */
-function loadMangaData() {
+async function loadMangaData() {
   const host = location.host
   const pathname = location.pathname
 
@@ -1358,7 +1375,7 @@ function loadMangaData() {
 
   try {
     // 调用对应的提取函数
-    const data = website.extract()
+    const data = await website.extract()
 
     if (data) {
       setMangaData(data)
