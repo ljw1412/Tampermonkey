@@ -265,12 +265,37 @@ container.style.setProperty('--vmr-bg-primary', '#your-color')
 
 ## ⌨️ 键盘快捷键
 
+### 快捷键列表
+
 | 按键 | 功能 | 说明 |
 |------|------|------|
 | `←` / `ArrowLeft` | 上一页 | 第一页时显示确认对话框跳转到上一章 |
 | `→` / `ArrowRight` | 下一页 | 最后一页时显示确认对话框跳转到下一章 |
 | `Space` | 下一页 | 同右箭头 |
 | `Esc` | 关闭 UI | 优先级：确认对话框 > 侧边栏 > 工具栏 |
+
+### 事件拦截机制
+
+阅读器采用**捕获阶段事件拦截**技术，确保键盘操作不会被原网站干扰：
+
+**实现原理：**
+```javascript
+// 在 document 上使用捕获阶段注册
+document.addEventListener('keydown', handleKeydown, true)
+
+// 处理函数中阻止所有传播
+event.preventDefault()              // 阻止默认行为（如滚动）
+event.stopPropagation()             // 阻止事件冒泡
+event.stopImmediatePropagation()    // 阻止同一元素上的其他监听器
+```
+
+**优势：**
+- ✅ **优先级最高**：捕获阶段从外到内传播（window → document → body），在 document 层面即可拦截
+- ✅ **完全隔离**：阻止原网站的所有键盘事件监听器
+- ✅ **防止冲突**：避免 Space 键滚动页面、Enter 键触发表单等意外行为
+- ✅ **简洁高效**：只需在 document 上注册一次，无需在 body 或 window 重复注册
+
+**注意：** 键盘快捷键仅在阅读器可见时生效，关闭后原网站的键盘功能恢复正常。
 
 ## 🌐 网站适配器
 

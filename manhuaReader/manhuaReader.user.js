@@ -9,6 +9,7 @@
 // @require      https://unpkg.com/vue@3/dist/vue.global.prod.js
 // @grant        unsafeWindow
 // @grant        GM_addStyle
+// @grant        GM_deleteValue
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_listValues
@@ -976,19 +977,20 @@ function initVueApp() {
         }, duration)
       }
 
-      const originKeydownListener = []
-
       // 键盘事件
       const handleKeydown = (event) => {
         if (!isVisible.value) return
 
+        // 阻止默认行为和事件传播
+        event.preventDefault()
+        event.stopPropagation()
+        event.stopImmediatePropagation()
+
         switch (event.key) {
           case 'ArrowRight':
-            event.preventDefault()
             nextPage()
             break
           case 'ArrowLeft':
-            event.preventDefault()
             prevPage()
             break
           case 'Escape':
@@ -1004,17 +1006,8 @@ function initVueApp() {
         }
       }
 
-      // 监听键盘事件
-      watch(
-        () => isVisible.value,
-        (v) => {
-          if (v) {
-            document.addEventListener('keydown', handleKeydown)
-          } else {
-            document.removeEventListener('keydown', handleKeydown)
-          }
-        }
-      )
+      // 监听键盘事件（使用捕获阶段，优先级最高）
+      document.addEventListener('keydown', handleKeydown, true)
 
       return {
         manga,

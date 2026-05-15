@@ -649,16 +649,28 @@ console.log(el.getAttribute('data-id'))
 4. 查找 API 请求（通常是 XHR/Fetch 类型）
 5. 查看请求响应数据
 
-### 技巧 3：断点调试
+### 技巧 3：键盘事件拦截测试
+
+如果你的适配器需要处理键盘事件，可以使用以下方法测试：
 
 ```
-// 在提取函数开始处添加断点
-function extractDataFromSite() {
-  debugger // 执行到这里会暂停
+// 1. 检查是否有其他监听器
+getEventListeners(document) // Chrome DevTools API
 
-  // ... 其余代码
-}
+// 2. 测试事件拦截
+document.addEventListener('keydown', (e) => {
+  console.log('捕获到按键:', e.key)
+}, true)
+
+// 3. 验证 stopImmediatePropagation 效果
+// 在阅读器可见时，原网站的键盘快捷键应该失效
 ```
+
+**最佳实践：**
+- 使用捕获阶段 (`true`) 注册监听器，优先级最高
+- 调用 `preventDefault()`、`stopPropagation()` 和 `stopImmediatePropagation()`
+- 只需在 `document` 上注册，无需在 `body` 重复注册
+- 仅在阅读器可见时才拦截事件
 
 ### 技巧 4：数据验证
 
