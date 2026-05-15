@@ -41,7 +41,11 @@ function injectStyles() {
     #vue-manga-reader {
       font-size: 12px;
       line-height: 1;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-family: -apple-system, PingFang SC, HarmonyOS_Regular, Roboto, Microsoft YaHei,  Helvetica Neue, Arial, sans-serif !important;
+    }
+
+    #vue-manga-reader * {
+      font-family: -apple-system, PingFang SC, HarmonyOS_Regular, Roboto, Microsoft YaHei,  Helvetica Neue, Arial, sans-serif !important;
     }
 
     /* 主题变量 - 亮色主题（默认） */
