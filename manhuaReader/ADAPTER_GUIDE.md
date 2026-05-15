@@ -668,9 +668,29 @@ document.addEventListener('keydown', (e) => {
 
 **最佳实践：**
 - 使用捕获阶段 (`true`) 注册监听器，优先级最高
+- **智能放行机制**：检测功能键（F1-F12）和修饰键组合（Shift/Ctrl/Alt/Meta），直接返回不拦截
 - 调用 `preventDefault()`、`stopPropagation()` 和 `stopImmediatePropagation()`
 - 只需在 `document` 上注册，无需在 `body` 重复注册
 - 仅在阅读器可见时才拦截事件
+
+**示例代码：**
+```javascript
+const handleKeydown = (event) => {
+  if (!isVisible.value) return
+
+  // 放行功能键和组合键
+  const isFunctionKey = event.key.startsWith('F') && event.key.length >= 2 && event.key.length <= 3
+  const hasModifier = event.shiftKey || event.ctrlKey || event.altKey || event.metaKey
+  if (isFunctionKey || hasModifier) return
+
+  // 拦截阅读器专用快捷键
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+
+  // 处理具体按键...
+}
+```
 
 ### 技巧 4：数据验证
 

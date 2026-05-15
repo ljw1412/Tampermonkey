@@ -279,19 +279,35 @@ container.style.setProperty('--vmr-bg-primary', '#your-color')
 阅读器采用**捕获阶段事件拦截**技术，确保键盘操作不会被原网站干扰：
 
 **实现原理：**
-```javascript
+``javascript
 // 在 document 上使用捕获阶段注册
 document.addEventListener('keydown', handleKeydown, true)
 
-// 处理函数中阻止所有传播
-event.preventDefault()              // 阻止默认行为（如滚动）
-event.stopPropagation()             // 阻止事件冒泡
-event.stopImmediatePropagation()    // 阻止同一元素上的其他监听器
+// 处理函数中智能放行和拦截
+const isFunctionKey = event.key.startsWith('F') && event.key.length >= 2 && event.key.length <= 3
+const hasModifier = event.shiftKey || event.ctrlKey || event.altKey || event.metaKey
+
+if (isFunctionKey || hasModifier) return // 放行功能键和组合键
+
+// 拦截阅读器专用快捷键
+event.preventDefault()
+event.stopPropagation()
+event.stopImmediatePropagation()
 ```
+
+**放行的按键：**
+- ✅ **功能键 F1-F12**：如 F5 刷新、F12 开发者工具等
+- ✅ **修饰键组合**：如 Ctrl+C（复制）、Ctrl+F（查找）、Alt+Tab（切换窗口）等
+- ✅ **Meta 键组合**：如 Win+D（显示桌面）等
+
+**拦截的按键：**
+- 🔒 `ArrowLeft` / `ArrowRight` - 翻页操作
+- 🔒 `Escape` - 关闭 UI/侧边栏/对话框
 
 **优势：**
 - ✅ **优先级最高**：捕获阶段从外到内传播（window → document → body），在 document 层面即可拦截
-- ✅ **完全隔离**：阻止原网站的所有键盘事件监听器
+- ✅ **智能放行**：不影响浏览器快捷键和开发调试功能
+- ✅ **完全隔离**：阻止原网站的其他键盘事件监听器
 - ✅ **防止冲突**：避免 Space 键滚动页面、Enter 键触发表单等意外行为
 - ✅ **简洁高效**：只需在 document 上注册一次，无需在 body 或 window 重复注册
 
