@@ -548,6 +548,20 @@ function injectStyles() {
       position: relative;
       z-index: 0;
     }
+    
+    .vmr-manga-preload {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 0;
+      overflow: hidden;
+    }
+
+    .vmr-manga-preload img{
+      width: 0;
+      height: 0;
+    }
 
     .vmr-manga-page {
       height: 100%;
@@ -829,9 +843,19 @@ function initVueApp() {
         return chapter.current?.images?.length || 0
       })
 
-      const currentPage = computed(() => {
+      const currentImage = computed(() => {
         if (!chapter.current?.images) return null
         return chapter.current.images[currentPageIndex.value]
+      })
+
+      const preloadImages = computed(() => {
+        if (!chapter.current?.images) return []
+        const offset = 2 // 即当前图片前offset个和后offset个
+        return Array.from({ length: offset * 2 }, (_, i) => {
+          return i < offset
+            ? chapter.current.images[currentPageIndex.value + i - offset]
+            : chapter.current.images[currentPageIndex.value + i - offset + 1]
+        }).filter((i) => i)
       })
 
       const hasNextChapter = computed(() => {
@@ -1042,7 +1066,8 @@ function initVueApp() {
         manga,
         chapter,
         currentPageIndex,
-        currentPage,
+        currentImage,
+        preloadImages,
         totalPages,
         isVisible,
         isUIVisible,
@@ -1188,8 +1213,12 @@ function initVueApp() {
           </div>
 
           <div class="vmr-image-container">
-            <div v-if="currentPage" class="vmr-manga-page">
-              <img :src="currentPage" :alt="'第' + (currentPageIndex + 1) + '页'" />
+            <div class="vmr-manga-preload">
+              <img v-for="imgUrl of preloadImages" :src="imgUrl" alt="预加载" />
+            </div>
+
+            <div v-if="currentImage" class="vmr-manga-page">
+              <img :src="currentImage" :alt="'第' + (currentPageIndex + 1) + '页'" />
             </div>
 
             <div v-else class="vmr-empty-state">
