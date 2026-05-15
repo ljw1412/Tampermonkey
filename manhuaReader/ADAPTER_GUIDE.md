@@ -56,6 +56,7 @@
 ```javascript
 {
   manga: {
+    id: string|number,       // 漫画id（可选）
     title: string,           // 漫画标题（必填）
     author: string,          // 作者名称（可选）
     cover: string,           // 封面图片URL（可选）
@@ -91,6 +92,7 @@
 ### 字段验证规则
 
 #### 必填字段
+
 - `manga.title`：不能为空字符串
 - `chapter.current.id`：必须是唯一标识
 - `chapter.current.name`：不能为空字符串
@@ -99,12 +101,14 @@
 - `chapter.list`：必须是数组
 
 #### 可选字段
+
 - 如果不存在上一章/下一章，设置为 `null`
 - 其他可选字段可以省略或设为空字符串
 
 ### URL 格式建议
 
 **推荐使用相对路径：**
+
 ```javascript
 // ✅ 推荐：相对路径
 url: `./${chapter_id}`
@@ -114,6 +118,7 @@ url: `https://example.com/chapter/${chapter_id}`
 ```
 
 **优势：**
+
 - 代码更简洁
 - 不依赖硬编码域名
 - 浏览器自动解析
@@ -124,9 +129,11 @@ url: `https://example.com/chapter/${chapter_id}`
 ### 步骤 1：分析目标网站
 
 #### 1.1 访问目标网站
+
 打开要适配的漫画网站，选择一个章节页面。
 
 #### 1.2 查找数据来源
+
 在浏览器控制台执行：
 
 ```javascript
@@ -134,14 +141,16 @@ url: `https://example.com/chapter/${chapter_id}`
 console.log(window)
 
 // 常见的数据存储位置
-console.log(window.__NUXT__)      // Nuxt.js
+console.log(window.__NUXT__) // Nuxt.js
 console.log(window.__INITIAL_STATE__) // Vuex
-console.log(window.COMIC_DATA)    // 自定义
-console.log(window.chapterData)   // 自定义
+console.log(window.COMIC_DATA) // 自定义
+console.log(window.chapterData) // 自定义
 ```
 
 #### 1.3 分析页面结构
+
 检查 DOM 结构，找到：
+
 - 漫画标题元素
 - 章节标题元素
 - 图片容器
@@ -226,8 +235,8 @@ const WEBSITE_LIST = [
   // ... 现有适配器
   {
     name: '网站中文名称',
-    host: 'domain.com',           // 域名关键字
-    pathnameRegEx: /^\/path\//,   // 路径正则（可选）
+    host: 'domain.com', // 域名关键字
+    pathnameRegEx: /^\/path\//, // 路径正则（可选）
     extract: extractDataFrom[SiteName]
   }
 ]
@@ -236,10 +245,12 @@ const WEBSITE_LIST = [
 #### 3.2 配置说明
 
 **host**: 域名匹配关键字
+
 - 使用 `includes` 匹配
 - 例如：`'zaimanhua.com'` 会匹配 `manhua.zaimanhua.com`
 
 **pathnameRegEx**: 路径匹配正则（可选）
+
 - 如果不设置，只要域名匹配即可
 - 如果设置，需要同时满足域名和路径
 - 例如：`/^\/view\//` 匹配 `/view/xxx` 路径
@@ -257,6 +268,7 @@ const WEBSITE_LIST = [
 ```
 
 **注意：**
+
 - 添加所有需要支持的 URL 模式
 - 可以使用通配符 `*`
 - 多个 `@match` 可以共存
@@ -307,15 +319,15 @@ function extractDataFromSimpleSite() {
     const authorEl = document.querySelector('.comic-author')
     const chapterTitleEl = document.querySelector('.chapter-title')
     const imageContainer = document.querySelector('.image-container')
-    
+
     // 提取图片
     const images = Array.from(imageContainer.querySelectorAll('img'))
-      .map(img => img.src || img.dataset.src)
-      .filter(url => url)
+      .map((img) => img.src || img.dataset.src)
+      .filter((url) => url)
 
     // 提取章节列表
     const chapterLinks = document.querySelectorAll('.chapter-list a')
-    const list = Array.from(chapterLinks).map(link => ({
+    const list = Array.from(chapterLinks).map((link) => ({
       id: link.dataset.chapterId,
       name: link.textContent.trim(),
       url: link.href
@@ -323,7 +335,7 @@ function extractDataFromSimpleSite() {
 
     // 构建数据
     const currentId = win.location.pathname.split('/').pop()
-    const currentIndex = list.findIndex(ch => ch.id === currentId)
+    const currentIndex = list.findIndex((ch) => ch.id === currentId)
 
     const data = {
       manga: {
@@ -380,11 +392,11 @@ function extractDataFromSPASite() {
       id: chapterData.id,
       name: chapterData.name,
       url: win.location.href,
-      images: chapterData.pages.map(page => page.image_url)
+      images: chapterData.pages.map((page) => page.image_url)
     }
 
     // 构建列表
-    const list = comicData.chapters.map(ch => ({
+    const list = comicData.chapters.map((ch) => ({
       id: ch.id,
       name: ch.title,
       url: `/comic/${comicData.id}/chapter/${ch.id}`,
@@ -392,7 +404,7 @@ function extractDataFromSPASite() {
     }))
 
     // 找到上一章和下一章
-    const currentIndex = list.findIndex(ch => ch.id === current.id)
+    const currentIndex = list.findIndex((ch) => ch.id === current.id)
     const previous = currentIndex > 0 ? list[currentIndex - 1] : null
     const next = currentIndex < list.length - 1 ? list[currentIndex + 1] : null
 
@@ -448,16 +460,16 @@ async function extractDataFromAPISite() {
       id: data.chapter.id,
       name: data.chapter.title,
       url: win.location.href,
-      images: data.chapter.images.map(img => img.url)
+      images: data.chapter.images.map((img) => img.url)
     }
 
-    const list = data.comic.chapters.map(ch => ({
+    const list = data.comic.chapters.map((ch) => ({
       id: ch.id,
       name: ch.title,
       url: `/comic/${comicId}/chapter/${ch.id}`
     }))
 
-    const currentIndex = list.findIndex(ch => ch.id === current.id)
+    const currentIndex = list.findIndex((ch) => ch.id === current.id)
     const previous = currentIndex > 0 ? list[currentIndex - 1] : null
     const next = currentIndex < list.length - 1 ? list[currentIndex + 1] : null
 
@@ -495,15 +507,19 @@ async function loadMangaData() {
 
 ```javascript
 // 1. 查看页面所有全局变量
-console.table(Object.keys(window).filter(k => 
-  !k.startsWith('__') && typeof window[k] !== 'function'
-))
+console.table(
+  Object.keys(window).filter(
+    (k) => !k.startsWith('__') && typeof window[k] !== 'function'
+  )
+)
 
 // 2. 搜索可能包含数据的变量
-Object.keys(window).forEach(key => {
-  if (key.toLowerCase().includes('comic') || 
-      key.toLowerCase().includes('manga') ||
-      key.toLowerCase().includes('chapter')) {
+Object.keys(window).forEach((key) => {
+  if (
+    key.toLowerCase().includes('comic') ||
+    key.toLowerCase().includes('manga') ||
+    key.toLowerCase().includes('chapter')
+  ) {
     console.log(key, window[key])
   }
 })
@@ -527,8 +543,8 @@ console.log(el.getAttribute('data-id'))
 ```javascript
 // 在提取函数开始处添加断点
 function extractDataFromSite() {
-  debugger; // 执行到这里会暂停
-  
+  debugger // 执行到这里会暂停
+
   // ... 其余代码
 }
 ```
@@ -539,24 +555,24 @@ function extractDataFromSite() {
 // 验证提取的数据
 function validateData(data) {
   const errors = []
-  
+
   if (!data.manga?.title) {
     errors.push('缺少漫画标题')
   }
-  
+
   if (!data.chapter?.current?.images?.length) {
     errors.push('缺少图片列表')
   }
-  
+
   if (!data.chapter?.list?.length) {
     errors.push('缺少章节列表')
   }
-  
+
   if (errors.length > 0) {
     console.error('数据验证失败:', errors)
     return false
   }
-  
+
   console.log('数据验证通过')
   return true
 }
@@ -567,6 +583,7 @@ function validateData(data) {
 ### Q1: 如何获取动态加载的数据？
 
 **方法一：等待数据加载**
+
 ```javascript
 function extractDataFromSite() {
   return new Promise((resolve) => {
@@ -576,7 +593,7 @@ function extractDataFromSite() {
         resolve(processData(window.DYNAMIC_DATA))
       }
     }, 100)
-    
+
     // 超时处理
     setTimeout(() => {
       clearInterval(checkData)
@@ -587,6 +604,7 @@ function extractDataFromSite() {
 ```
 
 **方法二：监听 DOM 变化**
+
 ```javascript
 const observer = new MutationObserver((mutations) => {
   // 检测到数据加载后提取
@@ -605,6 +623,7 @@ observer.observe(document.body, {
 ### Q2: 如何处理反爬虫机制？
 
 **建议：**
+
 1. 优先使用页面已渲染的数据
 2. 避免频繁的请求
 3. 模拟正常的用户行为
@@ -615,6 +634,7 @@ observer.observe(document.body, {
 ### Q3: 图片 URL 是相对路径怎么办？
 
 **解决方案：**
+
 ```javascript
 // 将相对路径转换为绝对路径
 const baseUrl = win.location.origin
@@ -627,9 +647,10 @@ const absoluteUrl = baseUrl + relativeUrl
 ### Q4: 章节列表太多，性能有问题？
 
 **优化方案：**
+
 ```javascript
 // 1. 只提取必要的字段
-const list = chapters.map(ch => ({
+const list = chapters.map((ch) => ({
   id: ch.id,
   name: ch.name,
   url: ch.url
@@ -646,17 +667,21 @@ const list = chapters.map(ch => ({
 ### Q5: 如何处理加密或混淆的数据？
 
 **方法一：查找解密函数**
+
 ```javascript
 // 在控制台中搜索解密相关函数
-Object.keys(window).forEach(key => {
-  if (key.toLowerCase().includes('decrypt') ||
-      key.toLowerCase().includes('decode')) {
+Object.keys(window).forEach((key) => {
+  if (
+    key.toLowerCase().includes('decrypt') ||
+    key.toLowerCase().includes('decode')
+  ) {
     console.log(key, window[key])
   }
 })
 ```
 
 **方法二：逆向工程**
+
 - 查看 JavaScript 源代码
 - 理解加密逻辑
 - 实现相应的解密函数
@@ -674,6 +699,7 @@ Object.keys(window).forEach(key => {
 欢迎提交新的网站适配器！
 
 **提交前请确保：**
+
 - [ ] 代码符合规范
 - [ ] 经过充分测试
 - [ ] 添加了必要的注释

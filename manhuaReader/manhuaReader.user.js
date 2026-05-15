@@ -1141,6 +1141,7 @@ function extractDataFromZaimanhua() {
     }
 
     const manga = {
+      id: comicInfo.id,
       title: comicInfo.title || '未知标题',
       author: comicInfo.authorsTagList
         ?.map((author) => author.tagName)
@@ -1256,45 +1257,38 @@ async function extractDataFromManhuagui() {
       return null
     }
 
+    // 构建当前章节对象
+    const { bid, bname, bpic, cid, cname, len, files, sl } = chapterInfo
+
     // 构建漫画基本信息
     const manga = {
-      title: chapterInfo.bname || '未知标题',
+      id: bid,
+      title: bname || '未知标题',
       author: '未知作者', // 漫画柜可能需要从其他位置获取作者信息
-      cover: chapterInfo.bpic
-        ? `https://cf.mhgui.com/cpic/h/${chapterInfo.bpic}`
-        : '',
+      cover: bpic ? `https://cf.mhgui.com/cpic/h/${bpic}` : '',
       description: '',
       url: '.'
     }
-
-    // 构建当前章节对象
-    const { cid, cname, len } = chapterInfo
 
     const current = {
       id: cid + '',
       name: cname,
       url: window.location.href,
-      images: chapterInfo.files.map((filename) => {
-        return `${pageVariables.manga.filePath}${filename}?e=${chapterInfo.sl.e}&m=${chapterInfo.sl.m}`
+      images: files.map((filename) => {
+        return `${pageVariables.manga.filePath}${filename}?e=${sl.e}&m=${sl.m}`
       }),
       pageCount: len
     }
 
+    const { prevId, nextId } = chapterInfo
+
     // 根据 prevId 和 nextId 确定上一章和下一章（直接组装，不依赖章节列表）
-    let previous = chapterInfo.prevId
-      ? {
-          id: chapterInfo.prevId,
-          name: '上一章',
-          url: `./${chapterInfo.prevId}.html`
-        }
+    let previous = prevId
+      ? { id: prevId, name: '上一章', url: `./${prevId}.html` }
       : null
 
-    let next = chapterInfo.nextId
-      ? {
-          id: chapterInfo.nextId,
-          name: '下一章',
-          url: `./${chapterInfo.nextId}.html`
-        }
+    let next = nextId
+      ? { id: nextId, name: '下一章', url: `./${nextId}.html` }
       : null
 
     // 构建章节列表（需要从页面中获取所有章节信息）
@@ -1304,7 +1298,7 @@ async function extractDataFromManhuagui() {
     // 尝试从详情页DOM中提取章节列表
     try {
       console.log('[漫画柜适配器] 尝试从详情页中提取章节列表')
-      const resp = await fetch('.')
+      const resp = await fetch(manga.url)
       const htmlText = await resp.text()
       const doc = new DOMParser().parseFromString(htmlText, 'text/html')
       console.log('[漫画柜适配器] 详情页请求成功：', doc)
