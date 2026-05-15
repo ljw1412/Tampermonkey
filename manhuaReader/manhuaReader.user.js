@@ -11,9 +11,95 @@
 // @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_listValues
 // ==/UserScript==
 
 /* global Vue */
+
+/**
+ *  缓存管理器
+ */
+class CacheManager {
+  /**
+   * 构造器
+   * @param {string} [namespacePrefix='cache_'] - 存储的命名空间前缀
+   */
+  constructor(namespacePrefix = 'cache_') {
+    this.namespacePrefix = namespacePrefix
+  }
+
+  /**
+   * 设置带过期时间的缓存数据
+   * @param {string} key - 存储的键名
+   * @param {any} data - 要存储的实际数据
+   * @param {number} ttlSeconds - 持续有效的时间（单位：秒）
+   */
+  set(key, data, ttlSeconds) {
+    const cacheKey = this.namespacePrefix + key
+    // 内部计算过期时间戳：当前时间 + 持续秒数 * 1000
+    const expireAt = Date.now() + ttlSeconds * 1000
+
+    const cacheData = {
+      data: data,
+      expireAt: expireAt
+    }
+    GM_setValue(cacheKey, cacheData)
+  }
+
+  /**
+   * 获取缓存数据
+   * @param {string} key - 存储的键名
+   * @returns {any|null} - 返回实际数据，若不存在或已过期则返回 null
+   */
+  get(key) {
+    const cacheKey = this.namespacePrefix + key
+    const cacheData = GM_getValue(cacheKey, null)
+
+    // 数据不存在
+    if (cacheData === null) {
+      return null
+    }
+
+    // 检查是否过期
+    const now = Date.now()
+    if (cacheData.expireAt && now > cacheData.expireAt) {
+      this.delete(key) // 已过期，自动删除
+      return null
+    }
+
+    return cacheData.data
+  }
+
+  /**
+   * 删除指定缓存
+   * @param {string} key - 存储的键名
+   */
+  delete(key) {
+    const cacheKey = this.namespacePrefix + key
+    GM_deleteValue(cacheKey)
+  }
+
+  /**
+   * 清除所有已过期的数据
+   */
+  clearExpired() {
+    const allKeys = GM_listValues()
+    const now = Date.now()
+    let i = 0
+    allKeys.forEach((key) => {
+      // 只处理带有当前实例命名空间前缀的键
+      if (key.startsWith(this.namespacePrefix)) {
+        const cacheData = GM_getValue(key, null)
+        if (cacheData && cacheData.expireAt && now > cacheData.expireAt) {
+          GM_deleteValue(key)
+          i++
+        }
+      }
+    })
+    if (i) console.log(`[Vue漫画阅读器] 删除${i}条过期缓存`)
+  }
+}
+const $cache = new CacheManager()
 
 /**
  * 格式化时间戳
@@ -1291,58 +1377,72 @@ async function extractDataFromManhuagui() {
       ? { id: nextId, name: '下一章', url: `./${nextId}.html` }
       : null
 
-    // 构建章节列表（需要从页面中获取所有章节信息）
-    // 默认创建一个只包含当前章节的列表
-    const list = [current]
+    const cacheKey = `manhuagui-${manga.id}`
+    const cache = $cache.get(cacheKey)
 
-    // 尝试从详情页DOM中提取章节列表
-    try {
-      console.log('[漫画柜适配器] 尝试从详情页中提取章节列表')
-      const resp = await fetch(manga.url)
-      const htmlText = await resp.text()
-      const doc = new DOMParser().parseFromString(htmlText, 'text/html')
-      console.log('[漫画柜适配器] 详情页请求成功：', doc)
-      const authorLabelEl = Array.from(
-        doc.querySelectorAll('.book-detail .detail-list li span strong')
-      ).find((item) => item.innerText.includes('作者'))
-      if (authorLabelEl) {
-        const author = Array.from(authorLabelEl.parentElement.childNodes)
-          .filter((el) => el !== authorLabelEl)
-          .map((item) => item.textContent)
-          .join('、')
-        if (author) {
-          manga.author = author
-          console.log('[漫画柜适配器] 获取到作者', author)
+    // 构建章节列表
+    const list = cache ? cache.chapters : []
+    let author = cache ? cache.author : ''
+
+    if (cache) {
+      console.log(`[漫画柜适配器] 发现并使用缓存<${cacheKey}>`, cache)
+    } else {
+      // 尝试从详情页DOM中提取作者和章节列表
+      try {
+        console.log('[漫画柜适配器] 尝试从详情页中提取章节列表')
+        const resp = await fetch(manga.url)
+        const htmlText = await resp.text()
+        const doc = new DOMParser().parseFromString(htmlText, 'text/html')
+        console.log('[漫画柜适配器] 详情页请求成功：', doc)
+        const authorLabelEl = Array.from(
+          doc.querySelectorAll('.book-detail .detail-list li span strong')
+        ).find((item) => item.innerText.includes('作者'))
+        if (authorLabelEl) {
+          author = Array.from(authorLabelEl.parentElement.childNodes)
+            .filter((el) => el !== authorLabelEl)
+            .map((item) => item.textContent)
+            .join('')
+          console.log('[漫画柜适配器] 从详情页获取到作者', author)
         }
+        const chapterListEls = Array.from(
+          doc.querySelectorAll('.chapter .chapter-list')
+        ).reverse()
+        const chapters = chapterListEls
+          .map((clist) => Array.from(clist.querySelectorAll('ul')))
+          .flat()
+          .map((ul) => Array.from(ul.querySelectorAll('li a')).reverse())
+          .flat()
+          .map((item) => {
+            const url = item.href
+            const pageCount =
+              parseInt(item.querySelector('i')?.innerText) || null
+            const idMatched = url.match(/\/comic\/\d+\/(\d+).html/)
+            const id = idMatched ? idMatched[1] : url
+            return { id, name: item.title, url, pageCount }
+          })
+        list.push(...chapters)
+        console.log('[漫画柜适配器] 从详情页获取章节信息成功', list)
+      } catch (error) {
+        console.warn('[漫画柜适配器] 提取作者和章节列表失败:', error)
       }
-      const chapterListEls = Array.from(
-        doc.querySelectorAll('.chapter .chapter-list')
-      ).reverse()
-      const extractedChapters = chapterListEls
-        .map((clist) => Array.from(clist.querySelectorAll('ul')))
-        .flat()
-        .map((ul) => Array.from(ul.querySelectorAll('li a')).reverse())
-        .flat()
-        .map((item) => {
-          const url = item.href
-          const pageCount = parseInt(item.querySelector('i')?.innerText) || null
-          const idMatched = url.match(/\/comic\/\d+\/(\d+).html/)
-          const id = idMatched ? idMatched[1] : url
-          return { id, name: item.title, url, pageCount }
-        })
-      if (extractedChapters.length > 0) {
-        list.length = 0
-        list.push(...extractedChapters)
-        console.log('[漫画柜适配器] 章节信息获取成功', list)
-        // 找到当前章节在列表中的索引
-        const currentIndex = list.findIndex((ch) => ch.id === current.id)
-        // 更新上一章和下一章
-        const previous = currentIndex > 0 ? list[currentIndex - 1] : null
-        const next =
-          currentIndex < list.length - 1 ? list[currentIndex + 1] : null
+    }
+
+    if (author) manga.author = author
+
+    if (list.length > 0) {
+      // 找到当前章节在列表中的索引
+      const currentIndex = list.findIndex((ch) => ch.id === current.id)
+      // 更新上一章和下一章
+      if (currentIndex > 0) previous = list[currentIndex - 1]
+      if (currentIndex < list.length - 1) next = list[currentIndex + 1]
+      // 如果缓存不存在，则保存当前相关数据
+      if (!cache) {
+        const cacheData = { author, chapters: list }
+        $cache.set(cacheKey, cacheData, 3600)
+        console.log(`[漫画柜适配器] 保存漫画详情页数据缓存`, cacheData)
       }
-    } catch (error) {
-      console.warn('[漫画柜适配器] 提取章节列表失败:', error)
+    } else {
+      list.push(current)
     }
 
     // 构建完整的数据结构
@@ -1446,7 +1546,9 @@ async function loadMangaData() {
   'use strict'
 
   console.log('[Vue漫画阅读器] 初始化...')
-
+  // 清理过期缓存
+  $cache.clearExpired()
+  // Vue注入
   if (!unsafeWindow.Vue) unsafeWindow.Vue = Vue
 
   // 注入样式
