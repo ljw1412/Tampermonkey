@@ -125,6 +125,10 @@ function formatTimestamp(timestamp) {
  */
 function injectStyles() {
   const styles = `
+    .vmr-overflow-hidden {
+      overflow: hidden;
+    }
+
     #vue-manga-reader {
       font-size: 12px;
       line-height: 1;
@@ -1034,6 +1038,17 @@ function initVueApp() {
       const handleKeydown = (event) => {
         if (!isVisible.value) return
 
+        // 放行条件：
+        // 1. 功能键 F1-F12
+        // 2. 修饰键组合 (Shift, Ctrl, Alt, Meta)
+        const isFunctionKey =
+          event.key.startsWith('F') &&
+          event.key.length >= 2 &&
+          event.key.length <= 3
+        const hasModifier =
+          event.shiftKey || event.ctrlKey || event.altKey || event.metaKey
+        if (isFunctionKey || hasModifier) return
+
         // 阻止默认行为和事件传播
         event.preventDefault()
         event.stopPropagation()
@@ -1061,6 +1076,17 @@ function initVueApp() {
 
       // 监听键盘事件（使用捕获阶段，优先级最高）
       document.addEventListener('keydown', handleKeydown, true)
+
+      watch(
+        () => isVisible.value,
+        (v) => {
+          if (v) {
+            document.documentElement.classList.add('vmr-overflow-hidden')
+          } else {
+            document.documentElement.classList.remove('vmr-overflow-hidden')
+          }
+        }
+      )
 
       return {
         manga,
