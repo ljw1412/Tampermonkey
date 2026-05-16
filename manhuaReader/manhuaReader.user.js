@@ -40,10 +40,7 @@ class CacheManager {
     // 内部计算过期时间戳：当前时间 + 持续秒数 * 1000
     const expireAt = Date.now() + ttlSeconds * 1000
 
-    const cacheData = {
-      data: data,
-      expireAt: expireAt
-    }
+    const cacheData = { data: data, expireAt: expireAt }
     GM_setValue(cacheKey, cacheData)
   }
 
@@ -127,6 +124,10 @@ function injectStyles() {
   const styles = `
     .vmr-overflow-hidden {
       overflow: hidden;
+    }
+
+    .rotate-90 {
+      transform: rotate(90deg);
     }
 
     .vmr-icon {
@@ -386,18 +387,14 @@ function injectStyles() {
       position: fixed;
       top: 0;
       left: 0;
-      right: 0;
       height: 64px;
-      padding: 0 20px;
-      background: var(--vmr-bg-overlay);
-      border-bottom: 1px solid var(--vmr-border-color);
+      padding-left: 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       z-index: 999;
       transform: translateY(-100%);
       transition: all 0.3s ease-in-out;
-      backdrop-filter: blur(4px);
       opacity: 0;
     }
 
@@ -418,14 +415,14 @@ function injectStyles() {
 
     .vmr-toolbar button {
       padding: 8px;
-      border: 1px solid var(--vmr-button-border);
-      border-radius: 4px;
-      background: var(--vmr-button-bg);
       cursor: pointer;
       font-size: 13px;
       line-height: 1;
-      transition: all 0.2s;
       color: var(--vmr-text-primary);
+      background: var(--vmr-button-bg);
+      border: 1px solid var(--vmr-button-border);
+      border-radius: 9999px;
+      transition: all 0.2s;
     }
 
     .vmr-toolbar button:hover {
@@ -441,6 +438,11 @@ function injectStyles() {
       gap: 8px;
       font-size: 14px;
       color: var(--vmr-text-primary);
+      backdrop-filter: blur(4px);
+      padding: 8px 16px;
+      background: var(--vmr-bg-overlay);
+      border: 1px solid var(--vmr-border-color);
+      border-radius: 9999px;
     }
 
     .vmr-breadcrumb a {
@@ -482,6 +484,14 @@ function injectStyles() {
       background: var(--vmr-bg-overlay);
       backdrop-filter: blur(4px);
       box-sizing: content-box;
+      transform: translateY(100%);
+      opacity: 0;
+      transition: all 0.3s ease-in-out;
+    }
+
+    .vmr-navbar.vmr-show .vmr-progress {
+      transform: translateY(0);
+      opacity: 1;
     }
 
     .vmr-progress-perv, .vmr-progress-next {
@@ -494,8 +504,15 @@ function injectStyles() {
       border-radius: 50%;
     }
 
+    .vmr-progress-perv .vmr-icon, .vmr-progress-next .vmr-icon{
+      transition: transform 0.3s ease;
+    }
+
     .vmr-progress-perv.disabled, .vmr-progress-next.disabled {
       cursor: not-allowed;
+    }
+
+    .vmr-progress-perv.disabled .vmr-icon, .vmr-progress-next.disabled .vmr-icon{
       opacity: 0.6;
     }
 
@@ -503,6 +520,51 @@ function injectStyles() {
     .vmr-progress-next:not(.disabled):hover {
       background: var(--vmr-btn-hover);
       cursor: pointer;
+    }
+
+    /* 按钮 Tooltip */
+    .vmr-progress-perv,
+    .vmr-progress-next {
+      position: relative;
+    }
+
+    .vmr-button-tooltip {
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-bottom: 8px;
+      padding: 6px 12px;
+      background: var(--vmr-bg-overlay);
+      backdrop-filter: blur(8px);
+      color: var(--vmr-text-primary);
+      border: 1px solid var(--vmr-border-color);
+      border-radius: 6px;
+      font-size: 12px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.2s ease;
+      box-shadow: var(--vmr-shadow);
+      z-index: 1000;
+    }
+
+    .vmr-button-tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: var(--vmr-bg-overlay);
+    }
+
+    .vmr-progress-perv:hover .vmr-button-tooltip,
+    .vmr-progress-next:hover .vmr-button-tooltip {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(-4px);
     }
 
     .vmr-progress-status {
@@ -528,7 +590,8 @@ function injectStyles() {
     /* 滑块提示框 */
     .vmr-slider-tooltip {
       position: absolute;
-      bottom: 45px;
+      top: -46px;
+      left: var(--slider-position, 0%);
       transform: translateX(-50%);
       padding: 6px 12px;
       background: var(--vmr-bg-overlay);
@@ -540,20 +603,27 @@ function injectStyles() {
       font-weight: 500;
       white-space: nowrap;
       pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
       z-index: 1000;
       box-shadow: var(--vmr-shadow);
-      animation: vmr-tooltip-fade-in 0.15s ease-out;
     }
 
-    @keyframes vmr-tooltip-fade-in {
-      from {
-        opacity: 0;
-        transform: translateX(-50%) translateY(4px);
-      }
-      to {
-        opacity: 1;
-        transform: translateX(-50%) translateY(0);
-      }
+    .vmr-slider-tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: var(--vmr-bg-overlay);
+    }
+
+    .vmr-page-slider:hover .vmr-slider-tooltip {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(-4px);
     }
 
     /* 右下角功能区 */
@@ -989,6 +1059,22 @@ function initVueApp() {
         return currentPageIndex.value >= totalPages.value - 1
       })
 
+      // 上一页按钮的 tooltip 文本
+      const prevButtonTooltip = computed(() => {
+        if (isFirstPage.value) {
+          return hasPrevChapter.value ? '上一章' : '到头了'
+        }
+        return '上一页'
+      })
+
+      // 下一页按钮的 tooltip 文本
+      const nextButtonTooltip = computed(() => {
+        if (isLastPage.value) {
+          return hasNextChapter.value ? '下一章' : '到头了'
+        }
+        return '下一页'
+      })
+
       // 方法
       const setData = (data) => {
         console.log('[Vue漫画阅读器] 接收到数据:', data)
@@ -1137,38 +1223,23 @@ function initVueApp() {
         goToPage(newIndex)
       }
 
-      // 滑块提示相关
-      const sliderTooltip = reactive({
-        isVisible: false,
-        value: 0,
-        position: 0
-      })
-
+      // 滑块提示相关 - 仅用于更新CSS变量
       const handleSliderInput = (event) => {
         const value = parseInt(event.target.value, 10)
-        sliderTooltip.value = value
-        sliderTooltip.isVisible = true
-        updateSliderTooltipPosition(event.target)
+        const min = parseInt(event.target.min, 10)
+        const max = parseInt(event.target.max, 10)
+        const percentage = ((value - min) / (max - min)) * 100
+
+        // 更新CSS变量来控制tooltip位置
+        event.target.parentElement.style.setProperty(
+          '--slider-position',
+          `${percentage}%`
+        )
       }
 
       const handleSliderChange = (event) => {
         const value = parseInt(event.target.value, 10)
         goToPage(value - 1)
-        hideSliderTooltip()
-      }
-
-      const hideSliderTooltip = () => {
-        sliderTooltip.isVisible = false
-      }
-
-      const updateSliderTooltipPosition = (inputElement) => {
-        const value = sliderTooltip.value
-        const min = parseInt(inputElement.min, 10)
-        const max = parseInt(inputElement.max, 10)
-
-        // 计算百分比位置
-        const percentage = ((value - min) / (max - min)) * 100
-        sliderTooltip.position = percentage
       }
 
       // 显示提示框
@@ -1233,8 +1304,24 @@ function initVueApp() {
         () => currentPageIndex.value,
         (newIndex) => {
           sliderValue.value = newIndex + 1
+          // 同时更新滑块tooltip的位置
+          updateSliderPosition(newIndex + 1)
         }
       )
+
+      // 更新滑块tooltip位置的辅助函数
+      const updateSliderPosition = (value) => {
+        const sliderElement = document.querySelector('.vmr-page-slider input')
+        if (sliderElement) {
+          const min = parseInt(sliderElement.min, 10) || 1
+          const max = parseInt(sliderElement.max, 10) || 1
+          const percentage = ((value - min) / (max - min)) * 100
+          sliderElement.parentElement.style.setProperty(
+            '--slider-position',
+            `${percentage}%`
+          )
+        }
+      }
 
       watch(
         () => isVisible.value,
@@ -1243,6 +1330,19 @@ function initVueApp() {
             document.documentElement.classList.add('vmr-overflow-hidden')
           } else {
             document.documentElement.classList.remove('vmr-overflow-hidden')
+          }
+        }
+      )
+
+      // 监听 totalPages 变化，初始化滑块位置
+      watch(
+        () => totalPages.value,
+        (newTotal) => {
+          if (newTotal > 0) {
+            // 延迟执行，确保 DOM 已更新
+            setTimeout(() => {
+              updateSliderPosition(currentPageIndex.value + 1)
+            }, 0)
           }
         }
       )
@@ -1262,11 +1362,12 @@ function initVueApp() {
         confirmDialog,
         theme,
         sliderValue,
-        sliderTooltip,
         hasNextChapter,
         hasPrevChapter,
         isFirstPage,
         isLastPage,
+        prevButtonTooltip,
+        nextButtonTooltip,
         setData,
         goToPage,
         nextPage,
@@ -1283,7 +1384,6 @@ function initVueApp() {
         handleProgressChange,
         handleSliderInput,
         handleSliderChange,
-        hideSliderTooltip,
         showToast,
         showConfirmDialog,
         handleConfirm,
@@ -1389,9 +1489,10 @@ function initVueApp() {
 
           <div class="vmr-progress">
             <div class="vmr-progress-perv" :class="{
-              disabled: currentPageIndex <= 0 && !hasPrevChapter,
+              disabled: currentPageIndex <= 0 && !hasPrevChapter
             }" @click="prevPage">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-left" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="M32 8.4 16.444 23.956 32 39.513"></path></svg>
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-left" :class="{ 'rotate-90': currentPageIndex <= 0 }" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="M32 8.4 16.444 23.956 32 39.513"></path></svg>
+              <div class="vmr-button-tooltip">{{ prevButtonTooltip }}</div>
             </div>
             <div class="vmr-progress-status">
               {{ currentPageIndex + 1 }} / {{ totalPages }}
@@ -1404,20 +1505,14 @@ function initVueApp() {
                 v-model.number="sliderValue"
                 @input="handleSliderInput"
                 @change="handleSliderChange"
-                @mouseleave="hideSliderTooltip"
               />
-              <div 
-                v-if="sliderTooltip.isVisible" 
-                class="vmr-slider-tooltip"
-                :style="{ left: sliderTooltip.position + '%' }"
-              >
-                {{ sliderTooltip.value }}
-              </div>
+              <div class="vmr-slider-tooltip">{{ sliderValue }}</div>
             </div>
             <div class="vmr-progress-next" :class="{ 
-              disabled: currentPageIndex >= totalPage - 1 && !hasNextChapter,
+              disabled: currentPageIndex >= totalPages - 1 && !hasNextChapter
             }" @click="nextPage">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-right" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="m16 39.513 15.556-15.557L16 8.4"></path></svg>
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-right" :class="{ 'rotate-90': currentPageIndex >= totalPages - 1 }" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="m16 39.513 15.556-15.557L16 8.4"></path></svg>
+              <div class="vmr-button-tooltip">{{ nextButtonTooltip }}</div>
             </div>
           </div>
         </div>
