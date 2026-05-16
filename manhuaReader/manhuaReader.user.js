@@ -511,13 +511,49 @@ function injectStyles() {
       text-align: center;
     }
 
-    .vmr-progress > input {
+    .vmr-page-slider {
+      position: relative;
       flex: 1 1 0%;
+    }
+
+    .vmr-page-slider input {
+      width: 100%;
       cursor: pointer;
-      height: 4px;
+      height: 6px;
       accent-color: #fff;
       background-color: rgba(255, 255, 255, 0.2);
       border-radius: 9999px;
+    }
+
+    /* 滑块提示框 */
+    .vmr-slider-tooltip {
+      position: absolute;
+      bottom: 45px;
+      transform: translateX(-50%);
+      padding: 6px 12px;
+      background: var(--vmr-bg-overlay);
+      backdrop-filter: blur(8px);
+      color: var(--vmr-text-primary);
+      border: 1px solid var(--vmr-border-color);
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 1000;
+      box-shadow: var(--vmr-shadow);
+      animation: vmr-tooltip-fade-in 0.15s ease-out;
+    }
+
+    @keyframes vmr-tooltip-fade-in {
+      from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
     }
 
     /* 右下角功能区 */
@@ -1094,9 +1130,42 @@ function initVueApp() {
       }
 
       const handleProgressChange = (event) => {
-        // event.target.value 是字符串，且对应的是 min=1 的值
+        // event.target.value 是字符串,且对应的是 min=1 的值
         const newIndex = parseInt(event.target.value, 10) - 1
         goToPage(newIndex)
+        hideSliderTooltip()
+      }
+
+      // 滑块提示相关
+      const sliderTooltip = reactive({
+        isVisible: false,
+        value: 0,
+        position: 0
+      })
+
+      const handleSliderInput = (event) => {
+        const value = parseInt(event.target.value, 10)
+        sliderTooltip.value = value
+        sliderTooltip.isVisible = true
+        updateSliderTooltipPosition(event.target)
+      }
+
+      const handleSliderChange = (event) => {
+        handleProgressChange(event)
+      }
+
+      const hideSliderTooltip = () => {
+        sliderTooltip.isVisible = false
+      }
+
+      const updateSliderTooltipPosition = (inputElement) => {
+        const value = sliderTooltip.value
+        const min = parseInt(inputElement.min, 10)
+        const max = parseInt(inputElement.max, 10)
+
+        // 计算百分比位置
+        const percentage = ((value - min) / (max - min)) * 100
+        sliderTooltip.position = percentage
       }
 
       // 显示提示框
@@ -1181,6 +1250,7 @@ function initVueApp() {
         toast,
         confirmDialog,
         theme,
+        sliderTooltip,
         hasNextChapter,
         hasPrevChapter,
         isFirstPage,
@@ -1199,6 +1269,9 @@ function initVueApp() {
         handleCenterClick,
         handleRightClick,
         handleProgressChange,
+        handleSliderInput,
+        handleSliderChange,
+        hideSliderTooltip,
         showToast,
         showConfirmDialog,
         handleConfirm,
@@ -1309,7 +1382,24 @@ function initVueApp() {
             <div class="vmr-progress-status">
               {{ currentPageIndex + 1 }} / {{ totalPages }}
             </div>
-            <input type="range" min="1" :max="totalPages" :value="currentPageIndex + 1" @change="handleProgressChange"/>
+            <div class="vmr-page-slider">
+              <input 
+                type="range" 
+                min="1" 
+                :max="totalPages" 
+                :value="currentPageIndex + 1" 
+                @input="handleSliderInput"
+                @change="handleSliderChange"
+                @mouseleave="hideSliderTooltip"
+              />
+              <div 
+                v-if="sliderTooltip.isVisible" 
+                class="vmr-slider-tooltip"
+                :style="{ left: sliderTooltip.position + '%' }"
+              >
+                {{ sliderTooltip.value }}
+              </div>
+            </div>
             <div class="vmr-progress-next" :class="{ disabled: currentPageIndex >= totalPages }" @click="nextPage">
               <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-right" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="m16 39.513 15.556-15.557L16 8.4"></path></svg>
             </div>
