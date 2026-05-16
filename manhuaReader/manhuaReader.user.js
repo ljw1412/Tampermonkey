@@ -244,10 +244,10 @@ function injectStyles() {
 
     /* 侧边栏 - 悬浮左侧滑入滑出 */
     .vmr-sidebar {
-      position: fixed;
+      position: absolute;
       top: 0;
       left: 0;
-      width: 300px;
+      width: 360px;
       height: 100%;
       background: var(--vmr-bg-secondary);
       border-right: 1px solid var(--vmr-border-color);
@@ -334,7 +334,7 @@ function injectStyles() {
     /* 章节列表 */
     .vmr-chapter-list {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       column-gap: 6px;
       row-gap: 6px;
       padding: 10px;
@@ -365,6 +365,9 @@ function injectStyles() {
     .vmr-chapter-name {
       font-size: 14px;
       font-weight: 500;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
 
     .vmr-chapter-pagecount {
@@ -384,7 +387,7 @@ function injectStyles() {
 
     /* 工具栏 - 悬浮顶部滑入滑出 */
     .vmr-toolbar {
-      position: fixed;
+      position: absolute;
       top: 0;
       left: 0;
       height: 64px;
@@ -404,7 +407,7 @@ function injectStyles() {
     }
 
     .vmr-toolbar.has-sidebar {
-      padding-left: 315px;
+      padding-left: 375px;
     }
 
     .vmr-toolbar-left {
@@ -429,6 +432,7 @@ function injectStyles() {
       background: var(--vmr-button-hover-bg);
       border-color: var(--vmr-button-hover-border);
       color: var(--vmr-button-hover-text);
+      transform: scale(1.1);
     }
 
     .vmr-breadcrumb {
@@ -461,29 +465,29 @@ function injectStyles() {
     }
 
     .vmr-navbar {
-      position: fixed;
+      position: absolute;
       bottom: 24px;
       left: 50%;
       transform: translateX(-50%);
-      width:100%;
+      width:90%;
       max-width: 680px;
       user-select:none;
-      z-index: 900;
+      z-index: 990;
     }
 
     .vmr-progress {
       display: flex;
       align-items: center;
       gap: 12px;
-      width:100%;
-      height: 36px;
+      width: 100%;
+      height: 44px;
       padding: 4px;
       color: var(--vmr-text-primary);
       border-radius: 9999px;
       border: 1px solid var(--vmr-border-color);
       background: var(--vmr-bg-overlay);
       backdrop-filter: blur(4px);
-      box-sizing: content-box;
+      box-sizing: border-box;
       transform: translateY(100%);
       opacity: 0;
       transition: all 0.3s ease-in-out;
@@ -626,24 +630,11 @@ function injectStyles() {
       transform: translateX(-50%) translateY(-4px);
     }
 
-    /* 右下角功能区 */
-    .vmr-bottom-right-panel {
-      position: fixed;
-      bottom: 8px;
-      right: 8px;
-      display: inline-flex;
-      flex-direction: column;
-      align-items: end;
-      gap: 8px;
-      z-index: 998;
-    }
-
-    .vmr-bottom-right-panel > .vmr-show {
-      transform: translateX(0);
-      opacity: 1;
-    }
-
+    /* 页码状态 */
     .vmr-pagination-status {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
       padding: 4px 12px;
       font-size: 13px;
       line-height: 1;
@@ -654,9 +645,22 @@ function injectStyles() {
       border-radius: 24px;
       user-select: none;
       white-space: nowrap;
+      transform: translate(100%, 100%);
+      transition: all 0.3s ease-in-out;
+      opacity: 0;
+      z-index: 980;
     }
 
+    .vmr-pagination-status.vmr-show {
+      transform: translate(0, 0);
+      opacity: 1;
+    }
+
+    /* 主题切换 */
     .vmr-btn-theme-toggle {
+      position: absolute;
+      top: 58px;
+      right: 14px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -672,6 +676,12 @@ function injectStyles() {
       transform: translateX(100%);
       transition: all 0.3s ease-in-out;
       opacity: 0;
+      z-index: 980;
+    }
+
+    .vmr-btn-theme-toggle.vmr-show {
+      transform: translateX(0);
+      opacity: 1;
     }
 
     .vmr-btn-theme-toggle:hover {
@@ -784,7 +794,7 @@ function injectStyles() {
 
     /* 提示框 */
     .vmr-toast {
-      position: fixed;
+      position: absolute;
       top: 80px;
       left: 50%;
       transform: translateX(-50%);
@@ -805,7 +815,7 @@ function injectStyles() {
 
     /* 确认对话框 */
     .vmr-confirm-dialog {
-      position: fixed;
+      position: absolute;
       top: 0;
       left: 0;
       right: 0;
@@ -1454,16 +1464,17 @@ function initVueApp() {
               :key="ch.id"
               class="vmr-chapter-item"
               :class="{ active: chapter.current?.id === ch.id }"
+              :title="ch.name"
               @click="loadChapter(ch)"
             >
               <div class="vmr-chapter-name">
-              {{ ch.name }}
-              <span v-if="ch.pageCount" class="vmr-chapter-pagecount">
-                {{ ch.pageCount }}P
-              </span>
-               </div>
+                {{ ch.name }}
+                <span v-if="ch.pageCount" class="vmr-chapter-pagecount">
+                  {{ ch.pageCount }}P
+                </span>
+              </div>
               <div class="vmr-chapter-update-time" v-if="ch.updateTime">
-                {{ ch.updateTime }}
+                  {{ ch.updateTime }}
               </div>
             </div>
           </div>
@@ -1482,6 +1493,11 @@ function initVueApp() {
               <span>{{ chapter.current?.name || '未选择章节' }}</span>
             </div>
           </div>
+        </div>
+
+        <!-- 主题切换 -->
+        <div class="vmr-btn-theme-toggle" :class="{ 'vmr-show': isUIVisible }" @click="toggleTheme" :title="theme === 'light' ? '切换到暗色主题' : '切换到亮色主题'">
+          {{ theme === 'light' ? '🌙' : '☀️' }}
         </div>
 
         <!-- 底部导航栏 -->
@@ -1517,14 +1533,9 @@ function initVueApp() {
           </div>
         </div>
 
-        <!-- 右下角功能区 -->
-        <div class="vmr-bottom-right-panel">
-          <div class="vmr-btn-theme-toggle" :class="{ 'vmr-show': isUIVisible }" @click="toggleTheme" :title="theme === 'light' ? '切换到暗色主题' : '切换到亮色主题'">
-            {{ theme === 'light' ? '🌙' : '☀️' }}
-          </div>
-          <div class="vmr-pagination-status">
-            {{ currentPageIndex + 1 }} / {{ totalPages }}
-          </div>
+        <!-- 页码状态 -->
+        <div class="vmr-pagination-status" :class="{ 'vmr-show': !isUIVisible }">
+          {{ currentPageIndex + 1 }} / {{ totalPages }}
         </div>
 
         <!-- 主内容区 -->
