@@ -78,7 +78,7 @@ function addDarkMode() {
   GM_addStyle(`
   .btn-theme-switch {
     position: fixed;
-    bottom: 80px;
+    bottom: 175px;
     right: 10px;
     display: flex;
     align-items: center;
@@ -130,7 +130,6 @@ function addDarkMode() {
     --theme-switch-bg: rgba(255, 255, 255, 0.35);
     --theme-switch-opacity: 0.3;
 
-
     color: var(--color-text-2);
     background-color: var(--color-bg-1);
   }
@@ -139,9 +138,14 @@ function addDarkMode() {
     color: var(--color-text-1);
   }
 
+  html[data-theme='dark'] > * {
+    text-shadow: none !important;
+  }
+
   html[data-theme='dark'] .topper,
   html[data-theme='dark'] .footer,
-  html[data-theme='dark'] .footer-wrap {
+  html[data-theme='dark'] .footer-wrap,
+  html[data-theme='dark'] .footer-main {
     color: var(--color-text-1);
     background-color: var(--color-bg-2);
   }
@@ -155,7 +159,8 @@ function addDarkMode() {
     border-color: var(--color-border-2);
   }
 
-  html[data-theme='dark'] .footer-wrap {
+  html[data-theme='dark'] .footer-wrap,
+  html[data-theme='dark'] .footer-main {
     border-color: var(--color-border-1);
   }
 
@@ -236,11 +241,15 @@ function addDarkMode() {
     border-color: var(--color-border-2);
   }
 
-  html[data-theme='dark'] .book-sort li.current {
+  html[data-theme='dark'] .book-sort li.current,
+  html[data-theme='dark'] .support li.pfunc a.current {
     background-color: var(--color-fill-3);
   }
 
-  
+  html[data-theme='dark'] .support li.pfunc a.current {
+    color: var(--color-primary);
+  }
+
   html[data-theme='dark'] .chapter-list *,
   html[data-theme='dark'] .score *,
   html[data-theme='dark'] .comment *,
@@ -267,13 +276,19 @@ function addDarkMode() {
   html[data-theme='dark'] .chapter-bar,
   html[data-theme='dark'] .chapter-bar h3,
   html[data-theme='dark'] .chapter-list li a,
-  html[data-theme='dark'] .comment
-  {
+  html[data-theme='dark'] .comment,
+  html[data-theme='dark'] .sub-btn,
+  html[data-theme='dark'] .support li a {
     background-color: var(--color-bg-3);
     border-color: var(--color-border-2);
     box-shadow: none;
   }
   
+  html[data-theme='dark'] .pager a,
+  html[data-theme='dark'] .pager span {
+    background: var(--color-bg-3);
+    border-color: var(--color-border-2);
+  }
 
   html[data-theme='dark'] .chapter-list li a {
     color: var(--color-text-2);
