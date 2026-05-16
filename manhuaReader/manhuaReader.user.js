@@ -129,6 +129,17 @@ function injectStyles() {
       overflow: hidden;
     }
 
+    .vmr-icon {
+      display: inline-block;
+      width: 1em;
+      height: 1em;
+      color: inherit;
+      font-style: normal;
+      vertical-align: -2px;
+      outline: none;
+      stroke: currentColor;
+    }
+
     #vue-manga-reader {
       font-size: 12px;
       line-height: 1;
@@ -171,8 +182,8 @@ function injectStyles() {
       --vmr-confirm-btn-bg: #667eea;
       --vmr-confirm-btn-text: white;
       --vmr-confirm-btn-hover: #5568d3;
-      --vmr-close-btn-bg: rgba(0,0,0,0.5);
-      --vmr-close-btn-hover: rgba(0,0,0,0.7);
+      --vmr-action-btn-bg: rgba(0,0,0,0.5);
+      --vmr-btn-hover: rgba(0,0,0,0.7);
       --vmr-scrollbar-track: #f1f1f1;
       --vmr-scrollbar-thumb: #888;
       --vmr-scrollbar-thumb-hover: #555;
@@ -182,7 +193,7 @@ function injectStyles() {
     .manga-reader-container[data-theme="dark"] {
       --vmr-bg-primary: #1a1a1a;
       --vmr-bg-secondary: #2d2d2d;
-      --vmr-bg-overlay: rgba(45, 45, 45, 0.9);
+      --vmr-bg-overlay: rgba(45, 45, 45, 0.85);
       --vmr-text-primary: #e0e0e0;
       --vmr-text-secondary: #b0b0b0;
       --vmr-text-muted: #888;
@@ -210,8 +221,8 @@ function injectStyles() {
       --vmr-confirm-btn-bg: #5568d3;
       --vmr-confirm-btn-text: white;
       --vmr-confirm-btn-hover: #4a5bc4;
-      --vmr-close-btn-bg: rgba(255,255,255,0.2);
-      --vmr-close-btn-hover: rgba(255,255,255,0.3);
+      --vmr-action-btn-bg: rgba(255,255,255,0.2);
+      --vmr-btn-hover: rgba(255,255,255,0.3);
       --vmr-scrollbar-track: #2d2d2d;
       --vmr-scrollbar-thumb: #555;
       --vmr-scrollbar-thumb-hover: #777;
@@ -445,6 +456,68 @@ function injectStyles() {
 
     .vmr-breadcrumb-separator {
       color: var(--vmr-text-muted);
+    }
+
+    .vmr-navbar {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      width:100%;
+      max-width: 680px;
+      user-select:none;
+      z-index: 900;
+    }
+
+    .vmr-progress {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width:100%;
+      height: 36px;
+      padding: 4px;
+      color: var(--vmr-text-primary);
+      border-radius: 9999px;
+      border: 1px solid var(--vmr-border-color);
+      background: var(--vmr-bg-overlay);
+      backdrop-filter: blur(4px);
+      box-sizing: content-box;
+    }
+
+    .vmr-progress-perv, .vmr-progress-next {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      font-size: 20px;
+      border-radius: 50%;
+    }
+
+    .vmr-progress-perv.disabled, .vmr-progress-next.disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .vmr-progress-perv:not(.disabled):hover,
+    .vmr-progress-next:not(.disabled):hover {
+      background: var(--vmr-btn-hover);
+      cursor: pointer;
+    }
+
+    .vmr-progress-status {
+      font-size: 14px;
+      min-width: 64px;
+      text-align: center;
+    }
+
+    .vmr-progress > input {
+      flex: 1 1 0%;
+      cursor: pointer;
+      height: 4px;
+      accent-color: #fff;
+      background-color: rgba(255, 255, 255, 0.2);
+      border-radius: 9999px;
     }
 
     /* 右下角功能区 */
@@ -716,7 +789,7 @@ function injectStyles() {
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      background: var(--vmr-close-btn-bg);
+      background: var(--vmr-action-btn-bg);
       color: white;
       border: none;
       cursor: pointer;
@@ -729,7 +802,7 @@ function injectStyles() {
     }
 
     .vmr-close-btn:hover {
-      background: var(--vmr-close-btn-hover);
+      background: var(--vmr-btn-hover);
       transform: rotate(90deg);
     }
 
@@ -741,7 +814,7 @@ function injectStyles() {
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      background: var(--vmr-close-btn-bg);
+      background: var(--vmr-action-btn-bg);
       color: white;
       border: none;
       cursor: pointer;
@@ -754,7 +827,7 @@ function injectStyles() {
     }
 
     .vmr-open-btn:hover {
-      background: var(--vmr-close-btn-hover);
+      background: var(--vmr-btn-hover);
       font-size: 30px;
     }
 
@@ -1020,6 +1093,12 @@ function initVueApp() {
         nextPage()
       }
 
+      const handleProgressChange = (event) => {
+        // event.target.value 是字符串，且对应的是 min=1 的值
+        const newIndex = parseInt(event.target.value, 10) - 1
+        goToPage(newIndex)
+      }
+
       // 显示提示框
       const showToast = (message, duration = 2000) => {
         toast.message = message
@@ -1119,6 +1198,7 @@ function initVueApp() {
         handleLeftClick,
         handleCenterClick,
         handleRightClick,
+        handleProgressChange,
         showToast,
         showConfirmDialog,
         handleConfirm,
@@ -1215,6 +1295,23 @@ function initVueApp() {
               <span v-else>{{ manga?.title || '未加载漫画' }}</span>
               <span class="vmr-breadcrumb-separator">/</span>
               <span>{{ chapter.current?.name || '未选择章节' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 底部导航栏 -->
+        <div class="vmr-navbar" :class="{ 'vmr-show': isUIVisible }">
+
+          <div class="vmr-progress">
+            <div class="vmr-progress-perv" :class="{ disabled: currentPageIndex <= 0 }" @click="prevPage">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-left" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="M32 8.4 16.444 23.956 32 39.513"></path></svg>
+            </div>
+            <div class="vmr-progress-status">
+              {{ currentPageIndex + 1 }} / {{ totalPages }}
+            </div>
+            <input type="range" min="1" :max="totalPages" :value="currentPageIndex + 1" @change="handleProgressChange"/>
+            <div class="vmr-progress-next" :class="{ disabled: currentPageIndex >= totalPages }" @click="nextPage">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-right" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="m16 39.513 15.556-15.557L16 8.4"></path></svg>
             </div>
           </div>
         </div>
