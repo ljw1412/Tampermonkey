@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         漫画助手 by:100-A
 // @namespace    http://tampermonkey.net/
-// @version      0.1
-// @description  动漫之家显示漫画id，部分其他网站破解屏蔽
+// @version      0.2.0
+// @description  漫画助手
 // @author       You
-// @match        *://manhua.dmzj.com/*
 // @match        *://*.manhuagui.com/*
 // @match        *://www.mangabox.me/reader/*/episodes/
 // @require      http://code.jquery.com/jquery-1.11.0.min.js
 // @require      https://cdn.bootcss.com/jquery-cookie/1.4.1/jquery.cookie.min.js
+// @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_addValueChangeListener
@@ -16,7 +16,7 @@
 // @grant        GM_unregisterMenuCommand
 // ==/UserScript==
 
-/*global $ */
+/*global $ pVars */
 
 const USE_ARIA2_KEY = 'use-aria2'
 function updateMenu() {
@@ -45,56 +45,251 @@ GM_addValueChangeListener(
   }
 )
 
-var ikanman_reg = /comic\/[0-9]+\/.+/
-//看漫画破解屏蔽
-if (location.host.indexOf('manhuagui') >= 0) {
-  //console.log($.cookie('country'));
-  if (
-    $.cookie('country') == 'CN' ||
-    typeof $.cookie('country') === 'undefined'
-  ) {
-    $.cookie('country', 'HK', { domain: 'manhuagui.com', path: '/' })
-    location.reload()
-  }
-}
+//***************************manhuagui的下载解析******************************
 
-$(document).ready(function () {
-  //console.log(location.host);
-  if (location.host.indexOf('dmzj') >= 0) {
-    $('p.subscribe_num').html('漫画id - <span>' + g_comic_id + '</span>')
-    console.log(
-      Array.from(
-        document.querySelectorAll('.middleright_mr .cartoon_online_border li a')
-      )
-        .map(
-          (a) =>
-            `aria2c https://imgzip.dmzj.com/${g_comic_url[0]}/${g_comic_id}/${a.href.match(/(\d+).shtml/)[1]}.zip -o ${a.title}.zip`
-        )
-        .join('\n')
-    )
-  }
+const iconMoon =
+  '<svg data-v-2bc6460e="" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="arco-icon arco-icon-moon-fill" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter" filter="" style="font-size: 32px;"><path d="M42.108 29.769c.124-.387-.258-.736-.645-.613A17.99 17.99 0 0 1 36 30c-9.941 0-18-8.059-18-18 0-1.904.296-3.74.844-5.463.123-.387-.226-.768-.613-.645C10.558 8.334 5 15.518 5 24c0 10.493 8.507 19 19 19 8.482 0 15.666-5.558 18.108-13.231Z" fill="currentColor" stroke="none"></path></svg>'
+const iconSun =
+  '<svg data-v-2bc6460e="" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="arco-icon arco-icon-sun" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter" filter="" style="font-size: 32px;"><circle cx="24" cy="24" r="7"></circle><path d="M23 7h2v2h-2zM23 39h2v2h-2zM41 23v2h-2v-2zM9 23v2H7v-2zM36.73 35.313l-1.415 1.415-1.414-1.415 1.414-1.414zM14.099 12.686l-1.414 1.415-1.414-1.415 1.414-1.414zM12.687 36.728l-1.414-1.415 1.414-1.414 1.414 1.414zM35.314 14.1 33.9 12.686l1.414-1.414 1.415 1.414z"></path><path fill="currentColor" stroke="none" d="M23 7h2v2h-2zM23 39h2v2h-2zM41 23v2h-2v-2zM9 23v2H7v-2zM36.73 35.313l-1.415 1.415-1.414-1.415 1.414-1.414zM14.099 12.686l-1.414 1.415-1.414-1.415 1.414-1.414zM12.687 36.728l-1.414-1.415 1.414-1.414 1.414 1.414zM35.314 14.1 33.9 12.686l1.414-1.414 1.415 1.414z"></path></svg>'
 
-  if (
-    location.host.indexOf('manhuagui') >= 0 &&
-    location.pathname.indexOf('/comic/') >= 0
-  ) {
-    if ($('div#mangaBox').length === 0) {
-      downloadikanman()
+function addDarkMode() {
+  const btnDarkSwitch = $('<div class="btn-theme-switch"></div>')
+
+  function updateTheme() {
+    const theme = GM_getValue('manhuagui_theme', 'light')
+    if (theme === 'dark') {
+      $('html').attr('data-theme', 'dark')
+      btnDarkSwitch.empty().append(iconMoon)
+    } else {
+      $('html').removeAttr('data-theme')
+      btnDarkSwitch.empty().append(iconSun)
     }
   }
-  if (
-    location.host.includes('manhuagui.com') &&
-    /\/comic\/\d+\/\d+.html/.test(location.pathname)
-  ) {
-    printAriaText()
+
+  updateTheme()
+
+  btnDarkSwitch.click(() => {
+    const theme = GM_getValue('manhuagui_theme', 'light')
+    GM_setValue('manhuagui_theme', theme !== 'dark' ? 'dark' : 'light')
+    updateTheme()
+  })
+
+  $('body').append(btnDarkSwitch)
+  GM_addStyle(`
+  .btn-theme-switch {
+    position: fixed;
+    bottom: 80px;
+    right: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    font-size: 30px;
+    line-height: 1;
+    color: #fff;
+    background-color: var(--theme-switch-bg, rgba(0, 0, 0, 0.15)) ;
+    cursor: pointer;
+    z-index: 10001;
+  }
+  .btn-theme-switch:hover {
+    background-color: #e32727;
+  }
+  .btn-theme-switch > svg {
+    width: 1em;
+    height: 1em;
+    opacity: var(--theme-switch-opacity, 0.8);
+  }
+  .btn-theme-switch:hover > svg {
+    opacity: 1;
   }
 
-  if (location.host.indexOf('mangabox') >= 0) {
-    mangabox()
-  }
-})
+  html[data-theme='dark'] {
+    --color-primary: #fe4800;
+    --color-white: rgba(255, 255, 255, .9);
+    --color-black: #000000;
+    --color-bg-1: #17171a;
+    --color-bg-2: #232324;
+    --color-bg-3: #2a2a2b;
+    --color-bg-4: #313132;
+    --color-bg-5: #373739;
+    --color-bg-white: #f6f6f6;
+    --color-text-1: rgba(255, 255, 255, .9);
+    --color-text-2: rgba(255, 255, 255, .7);
+    --color-text-3: rgba(255, 255, 255, .5);
+    --color-text-4: rgba(255, 255, 255, .3);
+    --color-fill-1: rgba(255, 255, 255, .04);
+    --color-fill-2: rgba(255, 255, 255, .08);
+    --color-fill-3: rgba(255, 255, 255, .12);
+    --color-fill-4: rgba(255, 255, 255, .16);
+    --color-border: #333335;
+    --color-border-1: #2e2e30;
+    --color-border-2: #484849;
+    --color-border-3: #5f5f60;
+    --color-border-4: #929293;
+    --theme-switch-bg: rgba(255, 255, 255, 0.35);
+    --theme-switch-opacity: 0.3;
 
-//***************************manhuagui的下载解析******************************
+
+    color: var(--color-text-2);
+    background-color: var(--color-bg-1);
+  }
+
+  html[data-theme='dark'] a {
+    color: var(--color-text-1);
+  }
+
+  html[data-theme='dark'] .topper,
+  html[data-theme='dark'] .footer,
+  html[data-theme='dark'] .footer-wrap {
+    color: var(--color-text-1);
+    background-color: var(--color-bg-2);
+  }
+
+  html[data-theme='dark'] .topper{
+    border-color: var(--color-border-2);
+    box-shadow: 0 1px 3px var(--color-border-2);
+  }
+
+  html[data-theme='dark'] .footer {
+    border-color: var(--color-border-2);
+  }
+
+  html[data-theme='dark'] .footer-wrap {
+    border-color: var(--color-border-1);
+  }
+
+  html[data-theme='dark'] .footer-cont {
+    color: var(--color-text-3);
+  }
+    
+  html[data-theme='dark'] .user-area .over .handle {
+    background-color: var(--color-fill-4);
+  }
+
+  html[data-theme='dark'] .user-view .panel {
+    background-color: var(--color-bg-3);
+  }
+
+  html[data-theme='dark'] .hlist li:hover {
+    background-color: var(--color-fill-2);
+  }
+
+  html[data-theme='dark'] .hlist a:hover {
+    color: var(--color-primary);
+  }
+
+  html[data-theme='dark'] .hlist-remove {
+    background-color: var(--color-fill-3);
+  }
+
+  html[data-theme='dark'] .nav-less {
+    color: var(--color-text-1);
+    background-color: #df8f27;
+    border-color: var(--color-border-4);
+  }
+
+  html[data-theme='dark'] .box-gray {
+    border: 1px solid var(--color-border-2);
+  }
+
+  html[data-theme='dark'] .bar-title {
+    background: var(--color-bg-2);
+    border-color: 1px solid var(--color-border-2);
+  }
+
+  html[data-theme='dark'] .filter-title h2 {
+    background-color: var(--color-bg-4);
+  }
+
+  html[data-theme='dark'] .filter-click {
+    border-color: var(--color-border-2);
+  }
+    
+  html[data-theme='dark'] .filter-click a {
+    background-color: var(--color-bg-3);
+  }
+
+  html[data-theme='dark'] .filter-nav {
+    background-color: var(--color-bg-3);
+  }
+
+  html[data-theme='dark'] .filter-nav .filter {
+    border-color: var(--color-border-2);
+  }
+
+  html[data-theme='dark'] .filter:hover {
+    background-color: var(--color-fill-2);
+  }
+
+  html[data-theme='dark'] .bar-tab {
+    background: var(--color-bg-2);
+    border-color: var(--color-border-2);
+  }
+
+  html[data-theme='dark'] .book-sort h5 {
+    color: var(--color-text-1);
+    border-color: var(--color-border-2);
+  }
+
+  html[data-theme='dark'] .book-sort li {
+    border-color: var(--color-border-2);
+  }
+
+  html[data-theme='dark'] .book-sort li.current {
+    background-color: var(--color-fill-3);
+  }
+
+  
+  html[data-theme='dark'] .chapter-list *,
+  html[data-theme='dark'] .score *,
+  html[data-theme='dark'] .comment *,
+  html[data-theme='dark'] .recent-cont * {
+    border-color: var(--color-border-2);
+  }
+
+  html[data-theme='dark'] .bar-tab,
+  html[data-theme='dark'] .book-intro,
+  html[data-theme='dark'] .intro-act,
+  html[data-theme='dark'] .score-vote,
+  html[data-theme='dark'] .score-per p,
+  html[data-theme='dark'] .commentBox h2 .t_c,
+  html[data-theme='dark'] .comment_tab,
+  html[data-theme='dark'] .content_r .text,
+  html[data-theme='dark'] .content_r .info_bar .userName {
+    color: var(--color-text-2);
+  }
+
+  html[data-theme='dark'] .score,
+  html[data-theme='dark'] .stitle,
+  html[data-theme='dark'] .recent-cont,
+  html[data-theme='dark'] .book-similar,
+  html[data-theme='dark'] .chapter-bar,
+  html[data-theme='dark'] .chapter-bar h3,
+  html[data-theme='dark'] .chapter-list li a,
+  html[data-theme='dark'] .comment
+  {
+    background-color: var(--color-bg-3);
+    border-color: var(--color-border-2);
+    box-shadow: none;
+  }
+  
+
+  html[data-theme='dark'] .chapter-list li a {
+    color: var(--color-text-2);
+    box-shadow: none;
+  }
+
+  html[data-theme='dark'] .chapter-list li a:hover {
+    color: var(--color-text-1);
+    background: var(--color-primary);
+  }
+
+  html[data-theme='dark'] .chapter-list li a:hover span{
+    border-color: var(--color-white);
+  }
+  `)
+}
 
 function printAriaText(doc = document) {
   const { filePath } = pVars.manga
@@ -116,14 +311,16 @@ function printAriaText(doc = document) {
     )
     console.log(`chcp 65001\n${ariaText.join('\n')}\npause`)
     addDownloadBtn(imageUrlList, {
-      dir: `./${bname}/${cname}/`,
+      dir: `./output/${bname}/${cname}/`,
       'User-Agent':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0',
       referer: 'https://www.manhuagui.com/',
-      allProxy: 'http://127.0.0.1:1086'
+      'all-proxy': 'http://127.0.0.1:1086',
+      'max-tries': 5,
+      'retry-wait': 3
     })
   } else {
-    console.log('script 不存在,无法解析', page.url)
+    console.log('script 不存在,无法解析')
   }
 }
 
@@ -133,7 +330,7 @@ function addDownloadBtn(data, config = {}) {
       '<div align="right"><div style="width: 150px;margin-bottom: 20px;">' +
       '<input type="button" value="下载" id="download-btn" style="margin-left: 5px;border: 1px solid gray;background-color: rgba(75, 156, 226, 0.6);"></div></div></div>'
   )
-  console.log('添加下载按钮')
+  console.log('[漫画助手] 添加下载按钮成功')
   $('#download-btn').click(function () {
     downloadEp(data, config)
   })
@@ -210,6 +407,7 @@ function downloadikanman() {
     $('#Tdownload').text('')
     alldown(a)
   })
+  console.log('[漫画助手] 添加解析条控件成功')
 }
 
 function changemode() {
@@ -304,7 +502,9 @@ async function getDownloadUrls(url, append = false) {
       'User-Agent':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0',
       referer: 'https://www.manhuagui.com/',
-      allProxy: 'http://127.0.0.1:1086'
+      'all-proxy': 'http://127.0.0.1:1086',
+      'max-tries': 5,
+      'retry-wait': 3
     })
   }
   //$('body').append('<iframe id="'+idName+'" name="'+idName+'" src="'+url+'" height="0" width="0"></iframe>');
@@ -510,3 +710,34 @@ function show_dialog(text) {
     }
   }, 1000)
 }
+
+//***************************执行体******************************
+//看漫画破解屏蔽
+if (location.host.includes('manhuagui.com')) {
+  //console.log($.cookie('country'));
+  if (
+    $.cookie('country') == 'CN' ||
+    typeof $.cookie('country') === 'undefined'
+  ) {
+    $.cookie('country', 'HK', { domain: 'manhuagui.com', path: '/' })
+    location.reload()
+  }
+  addDarkMode()
+}
+
+$(document).ready(function () {
+  //console.log(location.host);
+  if (location.host.includes('manhuagui.com')) {
+    if (location.pathname.startsWith('/comic/')) {
+      if (/\/comic\/\d+\/\d+.html/.test(location.pathname)) {
+        printAriaText()
+      } else if (/\/comic\/\d+/.test(location.pathname)) {
+        downloadikanman()
+      }
+    }
+  }
+
+  if (location.host.indexOf('mangabox') >= 0) {
+    mangabox()
+  }
+})
