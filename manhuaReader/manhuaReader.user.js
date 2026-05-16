@@ -922,6 +922,8 @@ function initVueApp() {
         list: [] // 章节列表
       })
       const currentPageIndex = ref(0)
+      // 滑块专用变量，用于双向绑定，避免闪烁
+      const sliderValue = ref(1)
       const isVisible = ref(false)
       const isUIVisible = ref(false)
       const isSidebarVisible = ref(false)
@@ -1133,7 +1135,6 @@ function initVueApp() {
         // event.target.value 是字符串,且对应的是 min=1 的值
         const newIndex = parseInt(event.target.value, 10) - 1
         goToPage(newIndex)
-        hideSliderTooltip()
       }
 
       // 滑块提示相关
@@ -1151,7 +1152,9 @@ function initVueApp() {
       }
 
       const handleSliderChange = (event) => {
-        handleProgressChange(event)
+        const value = parseInt(event.target.value, 10)
+        goToPage(value - 1)
+        hideSliderTooltip()
       }
 
       const hideSliderTooltip = () => {
@@ -1225,6 +1228,14 @@ function initVueApp() {
       // 监听键盘事件（使用捕获阶段，优先级最高）
       document.addEventListener('keydown', handleKeydown, true)
 
+      // 同步 currentPageIndex 到 sliderValue
+      watch(
+        () => currentPageIndex.value,
+        (newIndex) => {
+          sliderValue.value = newIndex + 1
+        }
+      )
+
       watch(
         () => isVisible.value,
         (v) => {
@@ -1250,6 +1261,7 @@ function initVueApp() {
         toast,
         confirmDialog,
         theme,
+        sliderValue,
         sliderTooltip,
         hasNextChapter,
         hasPrevChapter,
@@ -1376,7 +1388,9 @@ function initVueApp() {
         <div class="vmr-navbar" :class="{ 'vmr-show': isUIVisible }">
 
           <div class="vmr-progress">
-            <div class="vmr-progress-perv" :class="{ disabled: currentPageIndex <= 0 }" @click="prevPage">
+            <div class="vmr-progress-perv" :class="{
+              disabled: currentPageIndex <= 0 && !hasPrevChapter,
+            }" @click="prevPage">
               <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-left" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="M32 8.4 16.444 23.956 32 39.513"></path></svg>
             </div>
             <div class="vmr-progress-status">
@@ -1387,7 +1401,7 @@ function initVueApp() {
                 type="range" 
                 min="1" 
                 :max="totalPages" 
-                :value="currentPageIndex + 1" 
+                v-model.number="sliderValue"
                 @input="handleSliderInput"
                 @change="handleSliderChange"
                 @mouseleave="hideSliderTooltip"
@@ -1400,7 +1414,9 @@ function initVueApp() {
                 {{ sliderTooltip.value }}
               </div>
             </div>
-            <div class="vmr-progress-next" :class="{ disabled: currentPageIndex >= totalPages }" @click="nextPage">
+            <div class="vmr-progress-next" :class="{ 
+              disabled: currentPageIndex >= totalPage - 1 && !hasNextChapter,
+            }" @click="nextPage">
               <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-right" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="m16 39.513 15.556-15.557L16 8.4"></path></svg>
             </div>
           </div>
