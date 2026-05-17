@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         漫画助手 by:100-A
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.0.1
 // @description  漫画助手 - 支持漫画柜等网站的下载和阅读功能
 // @author       You
 // @match        *://*.manhuagui.com/*
@@ -220,6 +220,7 @@ const DARK_MODE_STYLES = `
     border-color: var(--color-border-2);
   }
 
+  html[data-theme='dark'] #Tdownload,
   html[data-theme='dark'] .bar-tab,
   html[data-theme='dark'] .book-intro,
   html[data-theme='dark'] .intro-act,
