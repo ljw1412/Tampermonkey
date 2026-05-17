@@ -205,7 +205,7 @@ const STYLES = `
 .vmr-sidebar.vmr-show { transform: translateX(0); opacity: 1; }
 
 .vmr-sidebar-header {
-  padding: 14px;
+  padding: 22px 18px;;
   background: linear-gradient(135deg, var(--vmr-gradient-start) 0%, var(--vmr-gradient-end) 100%);
   color: white;
 }
@@ -214,7 +214,7 @@ const STYLES = `
   color: inherit; text-decoration: none;
 }
 a.vmr-manga-title:hover { text-decoration: underline; }
-.vmr-manga-author { margin-top: 4px; font-size: 14px; opacity: 0.9; }
+.vmr-manga-author { margin-top: 6px; font-size: 14px; opacity: 0.9; }
 
 .vmr-chapter-info {
   padding: 15px 20px; border-bottom: 1px solid var(--vmr-border-color);
@@ -264,12 +264,13 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 .vmr-toolbar.vmr-show { transform: translateY(0); opacity: 1; }
 .vmr-toolbar.has-sidebar { padding-left: 375px; }
 .vmr-toolbar-left { display: flex; gap: 10px; align-items: center; }
-.vmr-toolbar button {
-  padding: 8px; cursor: pointer; font-size: 13px; line-height: 1;
+.vmr-toolbar .vmr-sidebar-toogle-btn {
+  display: flex; align-items: center; justify-content: center;
+  padding: 5px; cursor: pointer; font-size: 19px; line-height: 1;
   color: var(--vmr-text-primary); background: var(--vmr-button-bg);
   border: 1px solid var(--vmr-button-border); border-radius: 9999px; transition: all 0.2s;
 }
-.vmr-toolbar button:hover {
+.vmr-toolbar .vmr-sidebar-toogle-btn:hover {
   background: var(--vmr-button-hover-bg); border-color: var(--vmr-button-hover-border);
   color: var(--vmr-button-hover-text); transform: scale(1.1);
 }
@@ -296,18 +297,19 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 }
 .vmr-navbar.vmr-show .vmr-progress { transform: translateY(0); opacity: 1; }
 
-.vmr-progress-perv, .vmr-progress-next {
+.vmr-navbar-btn {
   display: flex; align-items: center; justify-content: center;
   width: 36px; height: 36px; font-size: 20px; border-radius: 50%;
+  position: relative; cursor: pointer; transition: all 0.3s ease;
 }
-.vmr-progress-perv .vmr-icon, .vmr-progress-next .vmr-icon { transition: transform 0.3s ease; }
-.vmr-progress-perv.disabled, .vmr-progress-next.disabled { cursor: not-allowed; }
-.vmr-progress-perv.disabled .vmr-icon, .vmr-progress-next.disabled .vmr-icon { opacity: 0.6; }
-.vmr-progress-perv:not(.disabled):hover, .vmr-progress-next:not(.disabled):hover {
-  background: var(--vmr-btn-hover); cursor: pointer;
+.vmr-navbar-btn .vmr-icon { transition: transform 0.3s ease; }
+.vmr-navbar-btn.disabled { cursor: not-allowed; }
+.vmr-navbar-btn.disabled .vmr-icon { opacity: 0.6; }
+.vmr-navbar-btn:not(.disabled):hover {
+  color: white; background: var(--vmr-btn-hover);
 }
+.vmr-setting-btn:hover .vmr-icon{ transform: rotate(90deg); }
 
-.vmr-progress-perv, .vmr-progress-next { position: relative; }
 .vmr-button-tooltip {
   position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
   margin-bottom: 8px; padding: 6px 12px; background: var(--vmr-bg-overlay);
@@ -322,7 +324,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
   transform: translateX(-50%); border: 6px solid transparent;
   border-top-color: var(--vmr-bg-overlay);
 }
-.vmr-progress-perv:hover .vmr-button-tooltip, .vmr-progress-next:hover .vmr-button-tooltip {
+.vmr-navbar-btn:hover .vmr-button-tooltip {
   opacity: 1; visibility: visible; transform: translateX(-50%) translateY(-4px);
 }
 
@@ -425,43 +427,54 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 }
 .vmr-toast.vmr-show { opacity: 1; }
 
-.vmr-confirm-dialog {
+.vmr-dialog {
   position: absolute; top: 0; left: 0; right: 0; bottom: 0;
   background: var(--vmr-dialog-overlay); display: flex;
   align-items: center; justify-content: center; z-index: 10002;
   opacity: 0; visibility: hidden; transition: all 0.3s;
 }
-.vmr-confirm-dialog.vmr-show { opacity: 1; visibility: visible; }
-.vmr-confirm-box {
-  background: var(--vmr-dialog-bg); border-radius: 8px; padding: 24px;
-  min-width: 320px; max-width: 400px; box-shadow: var(--vmr-dialog-shadow);
+.vmr-dialog.vmr-show { opacity: 1; visibility: visible; }
+.vmr-dialog-box {
+  background: var(--vmr-dialog-bg); border-radius: 8px;
+  box-shadow: var(--vmr-dialog-shadow);
   transform: scale(0.9); transition: transform 0.3s;
 }
-.vmr-confirm-dialog.vmr-show .vmr-confirm-box { transform: scale(1); }
-.vmr-confirm-title {
-  font-size: 18px; font-weight: bold; margin-bottom: 12px; color: var(--vmr-text-primary);
-}
-.vmr-confirm-message {
-  font-size: 14px; color: var(--vmr-text-secondary);
-  margin-bottom: 24px; line-height: 1.6;
-}
-.vmr-confirm-buttons { display: flex; gap: 12px; justify-content: flex-end; }
-.vmr-confirm-buttons button {
-  padding: 8px 20px; border: none; border-radius: 4px;
-  cursor: pointer; font-size: 14px; transition: all 0.2s;
-}
-.vmr-btn-cancel { background: var(--vmr-cancel-btn-bg); color: var(--vmr-cancel-btn-text); }
-.vmr-btn-cancel:hover { background: var(--vmr-cancel-btn-hover); }
-.vmr-btn-confirm { background: var(--vmr-confirm-btn-bg); color: var(--vmr-confirm-btn-text); }
-.vmr-btn-confirm:hover { background: var(--vmr-confirm-btn-hover); }
+.vmr-dialog.vmr-show .vmr-dialog-box { transform: scale(1); }
 
-.vmr-close-btn {
+.vmr-confirm-box {
+  padding: 24px; min-width: 320px; max-width: 400px;
+}
+
+.vmr-settings-box {
+  width: calc(100% - 24px); max-width: 640px; overflow: hidden;
+}
+.vmr-settings-header {
+  padding: 20px 24px; border-bottom: 1px solid var(--vmr-border-color);
+  display: flex; align-items: center; justify-content: center; position: relative;
+}
+.vmr-settings-title {
+  font-size: 18px; font-weight: bold; color: var(--vmr-text-primary);
+}
+.vmr-settings-close {
+  position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+  width: 32px; height: 32px; border-radius: 50%; background: transparent;
+  border: none; cursor: pointer; font-size: 24px; color: var(--vmr-text-secondary);
+  display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+}
+.vmr-settings-close:hover {
+  background: var(--vmr-hover-bg); color: var(--vmr-text-primary);
+}
+.vmr-settings-content {
+  padding: 24px; max-height: 60vh; overflow-y: auto;
+}
+
+.vmr-reader-close-btn {
   position: fixed; top: 14px; right: 14px; width: 36px; height: 36px;
   border-radius: 50%; background: var(--vmr-action-btn-bg); color: white;
   border: none; cursor: pointer; font-size: 20px; display: flex;
   align-items: center; justify-content: center; transition: all 0.2s; z-index: 10001;
 }
-.vmr-close-btn:hover { background: var(--vmr-btn-hover); transform: rotate(90deg); }
+.vmr-reader-close-btn:hover { background: var(--vmr-btn-hover); transform: rotate(90deg); }
 
 .vmr-open-btn {
   position: fixed; top: 14px; right: 14px; width: 36px; height: 36px;
@@ -616,6 +629,7 @@ async function extractFromManhuagui() {
     const cache = $cache.get(cacheKey)
     const list = cache?.chapters || []
     let author = cache?.author || ''
+    let description = cache?.description || ''
 
     if (cache) {
       console.log(`[漫画柜适配器] 使用缓存<${cacheKey}>`)
@@ -636,6 +650,14 @@ async function extractFromManhuagui() {
             .filter((n) => n !== authorEl)
             .map((n) => n.textContent)
             .join('')
+        }
+
+        // 提取简介
+        const introAllEl = doc.querySelector('.book-detail #intro-all')
+        if (introAllEl) {
+          description = Array.from(introAllEl.childNodes)
+            .map((item) => item.textContent)
+            .join('\n')
         }
 
         // 提取章节列表
@@ -665,6 +687,7 @@ async function extractFromManhuagui() {
     }
 
     if (author) manga.author = author
+    if (description) manga.description = description
 
     if (list.length > 0) {
       const currentIndex = list.findIndex((ch) => ch.id === current.id)
@@ -672,8 +695,9 @@ async function extractFromManhuagui() {
       if (currentIndex < list.length - 1) next = list[currentIndex + 1]
 
       if (!cache) {
-        $cache.set(cacheKey, { author, chapters: list }, 3600)
-        console.log(`[漫画柜适配器] 保存缓存`, { author, chapters: list })
+        const cacheData = { author, description, chapters: list }
+        $cache.set(cacheKey, cacheData, 3600)
+        console.log(`[漫画柜适配器] 保存缓存`, cacheData)
       }
     } else {
       list.push(current)
@@ -735,6 +759,7 @@ function createVueApp() {
       const isUIVisible = ref(false)
       const isSidebarVisible = ref(false)
       const isClickZoneLocked = ref(false)
+      const isSettingsVisible = ref(false)
 
       // 主题
       const theme = ref(GM_getValue(CONFIG.THEME_KEY, CONFIG.DEFAULT_THEME))
@@ -887,6 +912,14 @@ function createVueApp() {
         GM_setValue(CONFIG.THEME_KEY, theme.value)
       }
 
+      const toggleSettings = () => {
+        isSettingsVisible.value = !isSettingsVisible.value
+      }
+
+      const closeSettings = () => {
+        isSettingsVisible.value = false
+      }
+
       const closeReader = () => {
         isVisible.value = false
       }
@@ -999,6 +1032,7 @@ function createVueApp() {
         isUIVisible,
         isSidebarVisible,
         isClickZoneLocked,
+        isSettingsVisible,
         theme,
         toast,
         confirmDialog,
@@ -1019,6 +1053,8 @@ function createVueApp() {
         toggleSidebar,
         toggleToolbar,
         toggleTheme,
+        toggleSettings,
+        closeSettings,
         closeReader,
         openReader,
         handleLeftClick,
@@ -1037,17 +1073,31 @@ function createVueApp() {
       <div v-if="!isVisible" class="vmr-open-btn" @click="openReader" title="打开阅读器">📖</div>
 
       <div v-if="isVisible" class="manga-reader-container" :data-theme="theme">
-        <div class="vmr-close-btn" @click="closeReader" title="关闭">×</div>
+        <div class="vmr-reader-close-btn" @click="closeReader" title="关闭">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-close" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="M9.857 9.858 24 24m0 0 14.142 14.142M24 24 38.142 9.858M24 24 9.857 38.142"></path></svg>
+        </div>
 
         <div class="vmr-toast" :class="{ 'vmr-show': toast.isVisible }">{{ toast.message }}</div>
 
-        <div class="vmr-confirm-dialog" :class="{ 'vmr-show': confirmDialog.isVisible }" @click.self="handleCancel">
-          <div class="vmr-confirm-box">
+        <div class="vmr-dialog vmr-confirm-dialog" :class="{ 'vmr-show': confirmDialog.isVisible }" @click.self="handleCancel">
+          <div class="vmr-dialog-box vmr-confirm-box">
             <div class="vmr-confirm-title">{{ confirmDialog.title }}</div>
             <div class="vmr-confirm-message">{{ confirmDialog.message }}</div>
             <div class="vmr-confirm-buttons">
               <button class="vmr-btn-cancel" @click="handleCancel">取消</button>
               <button class="vmr-btn-confirm" @click="handleConfirm">确认</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="vmr-dialog vmr-settings-dialog" :class="{ 'vmr-show': isSettingsVisible }" @click.self="closeSettings">
+          <div class="vmr-dialog-box vmr-settings-box">
+            <div class="vmr-settings-header">
+              <div class="vmr-settings-title">阅读器设置</div>
+              <button class="vmr-settings-close" @click="closeSettings" title="关闭">×</button>
+            </div>
+            <div class="vmr-settings-content">
+              <!-- 设置内容区域 -->
             </div>
           </div>
         </div>
@@ -1084,9 +1134,12 @@ function createVueApp() {
 
         <div class="vmr-toolbar" :class="{ 'vmr-show': isUIVisible, 'has-sidebar': isSidebarVisible }">
           <div class="vmr-toolbar-left">
-            <button @click="toggleSidebar" :title="isSidebarVisible ? '隐藏侧边栏' : '显示侧边栏'">
-              {{ isSidebarVisible ? '◀' : '▶' }}
-            </button>
+            <div class="vmr-sidebar-toogle-btn" @click="toggleSidebar" :title="isSidebarVisible ? '隐藏侧边栏' : '显示侧边栏'">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-menu-toggle" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter">
+                <path v-if="isSidebarVisible" d="M42 11H6M42 24H22M42 37H6M13.66 26.912l-4.82-3.118 4.82-3.118v6.236Z"></path>
+                <path v-else d="M6 11h36M22 24h20M6 37h36M8 20.882 12.819 24 8 27.118v-6.236Z"></path>
+              </svg>
+            </div>
             <div v-if="!isSidebarVisible" class="vmr-breadcrumb">
               <a v-if="manga?.url" :href="manga.url" target="_blank" rel="noopener noreferrer">{{ manga?.title || '未加载漫画' }}</a>
               <span v-else>{{ manga?.title || '未加载漫画' }}</span>
@@ -1103,24 +1156,23 @@ function createVueApp() {
 
         <div class="vmr-navbar" :class="{ 'vmr-show': isUIVisible }">
           <div class="vmr-progress">
-            <div class="vmr-progress-perv" :class="{ disabled: currentPageIndex <= 0 && !hasPrevChapter }" @click="prevPage">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"
-                   class="vmr-icon vmr-icon-left" :class="{ 'rotate-90': currentPageIndex <= 0 }"
-                   stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter">
+            <div class="vmr-navbar-btn vmr-progress-perv" :class="{ disabled: currentPageIndex <= 0 && !hasPrevChapter }" @click="prevPage">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-left" :class="{ 'rotate-90': currentPageIndex <= 0 }" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter">
                 <path d="M32 8.4 16.444 23.956 32 39.513"></path>
               </svg>
               <div class="vmr-button-tooltip">{{ prevButtonTooltip }}</div>
             </div>
             <div class="vmr-progress-status">{{ currentPageIndex + 1 }} / {{ totalPages }}</div>
             <div class="vmr-page-slider">
-              <input type="range" min="1" :max="totalPages" v-model.number="sliderValue"
-                     @input="handleSliderInput" @change="handleSliderChange"/>
+              <input type="range" min="1" :max="totalPages" v-model.number="sliderValue" @input="handleSliderInput" @change="handleSliderChange"/>
               <div class="vmr-slider-tooltip">{{ sliderValue }}</div>
             </div>
-            <div class="vmr-progress-next" :class="{ disabled: currentPageIndex >= totalPages - 1 && !hasNextChapter }" @click="nextPage">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"
-                   class="vmr-icon vmr-icon-right" :class="{ 'rotate-90': currentPageIndex >= totalPages - 1 }"
-                   stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter">
+            <div class="vmr-navbar-btn vmr-setting-btn" @click="toggleSettings">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-settings" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="M18.797 6.732A1 1 0 0 1 19.76 6h8.48a1 1 0 0 1 .964.732l1.285 4.628a1 1 0 0 0 1.213.7l4.651-1.2a1 1 0 0 1 1.116.468l4.24 7.344a1 1 0 0 1-.153 1.2L38.193 23.3a1 1 0 0 0 0 1.402l3.364 3.427a1 1 0 0 1 .153 1.2l-4.24 7.344a1 1 0 0 1-1.116.468l-4.65-1.2a1 1 0 0 0-1.214.7l-1.285 4.628a1 1 0 0 1-.964.732h-8.48a1 1 0 0 1-.963-.732L17.51 36.64a1 1 0 0 0-1.213-.7l-4.65 1.2a1 1 0 0 1-1.116-.468l-4.24-7.344a1 1 0 0 1 .153-1.2L9.809 24.7a1 1 0 0 0 0-1.402l-3.364-3.427a1 1 0 0 1-.153-1.2l4.24-7.344a1 1 0 0 1 1.116-.468l4.65 1.2a1 1 0 0 0 1.213-.7l1.286-4.628Z"></path><path d="M30 24a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"></path></svg>
+              <div class="vmr-button-tooltip">设置</div>
+            </div>
+            <div class="vmr-navbar-btn vmr-progress-next" :class="{ disabled: currentPageIndex >= totalPages - 1 && !hasNextChapter }" @click="nextPage">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-right" :class="{ 'rotate-90': currentPageIndex >= totalPages - 1 }" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter">
                 <path d="m16 39.513 15.556-15.557L16 8.4"></path>
               </svg>
               <div class="vmr-button-tooltip">{{ nextButtonTooltip }}</div>
