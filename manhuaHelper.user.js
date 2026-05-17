@@ -5,7 +5,6 @@
 // @description  漫画助手 - 支持漫画柜等网站的下载和阅读功能
 // @author       You
 // @match        *://*.manhuagui.com/*
-// @match        *://www.mangabox.me/reader/*/episodes/
 // @require      http://code.jquery.com/jquery-1.11.0.min.js
 // @require      https://cdn.bootcss.com/jquery-cookie/1.4.1/jquery.cookie.min.js
 // @grant        GM_addStyle
@@ -658,160 +657,13 @@ class ManhuaGuiHandler {
   }
 }
 
-// ==================== 漫画王(mangabox)功能 ====================
-class MangaBoxHandler {
-  constructor() {
-    if (navigator.userAgent.indexOf('Android') === -1) return
-
-    this.init()
-  }
-
-  init() {
-    const title = $('.episodes_title').text()
-    const author =
-      '[' +
-      Array.from($('.episodes_author'))
-        .map((el) => $(el).text())
-        .join('_') +
-      ']'
-    const bname = title + author
-
-    this.injectStyles()
-    this.createUI(bname)
-    this.bindEvents(bname)
-  }
-
-  injectStyles() {
-    GM_addStyle(`
-      .forDownload {
-        position: absolute;
-        top: 11px;
-        right: 11px;
-        cursor: pointer;
-        border: 1px solid #D2D2D2;
-        background-color: #75B3C8;
-        color: white;
-        padding: 4px;
-      }
-      .forDownload:hover {
-        background-color: green;
-        color: white;
-      }
-    `)
-  }
-
-  createUI(bname) {
-    $('body').prepend(
-      '<div id="myShadow" style="display:none;position: fixed; left: 0px; top: 0px; z-index: 89999; opacity: 0.5; width: 100%; height: 100%; background: none 0% 0% repeat scroll rgb(0, 0, 0);"></div>'
-    )
-
-    const $download_btn = $('<a class="forDownload downloadThis">解析本话</a>')
-    const $download_all_btn = $(
-      '<a class="forDownload" id="downloadAll">解析全部</a>'
-    )
-
-    $('.episodes_main').css('position', 'relative').append($download_all_btn)
-
-    const episodes_item = $('.episodes_item a').parent()
-    episodes_item.css('position', 'relative').append($download_btn)
-
-    // 创建打印对话框
-    const PrintDialog =
-      '<div id="printdialog" style="position: fixed;left: 50%;top: 50%;z-index: 99998;transform: translate(-50%,-50%);width: 70%;height: 70%;background-color: white;border: 1px solid #75B3C8;border-radius: 20px;display:none;text-align:center">' +
-      '<div style="text-align: center;padding: 5px;">解析结果</div>' +
-      '<textarea id="Tdownload" style="width: 95%;height: 85%;border: 1px solid green;font-family: 微软雅黑" disabled="disabled"></textarea>' +
-      '<div style="text-align: center;padding: 5px;">' +
-      '<button style="border: 0;background-color: rgb(255, 0, 0);font-size: 16px;font-weight: bold;color:white;font-family: 微软雅黑;padding: 3px 10px;margin-right: 10px;" id="copy">复制</button>' +
-      '<button style="border: 0;background-color: rgb(0, 255, 0);font-size: 16px;font-weight: bold;color:black;font-family: 微软雅黑;padding: 3px 10px;margin-left: 10px;" id="close">关闭</button>' +
-      '</div></div>'
-
-    $('body').append(PrintDialog)
-    $('body').append('<div id="AjaxTemp"></div>')
-  }
-
-  bindEvents(bname) {
-    $('.downloadThis').click((e) => {
-      $('#Tdownload').empty()
-      $('#printdialog, #myShadow').show()
-      const $link = $(e.currentTarget).prev('a')
-      const cname = $link.find('.episodes_strong_text').text()
-      this.request($link.attr('href'), bname, cname)
-    })
-
-    $('#downloadAll').click(() => {
-      $('#Tdownload').empty()
-      $('#printdialog, #myShadow').show()
-      this.getAll(bname)
-    })
-
-    $('#copy').click(() => {
-      UI.copyText($('#Tdownload').text())
-      UI.showDialog('复制成功')
-      $('#printdialog, #myShadow').hide()
-    })
-
-    $('#close, #myShadow').click(() => {
-      $('#printdialog, #myShadow').hide()
-    })
-  }
-
-  request(url, bname, cname) {
-    $.ajax({
-      url: url,
-      success: (res) => {
-        $('#AjaxTemp').html($(res).filter('script:contains("portrait_img")'))
-        $('#Tdownload').append(
-          this.printResults(
-            bname,
-            cname,
-            portrait_img,
-            '',
-            '--no-check-certificate'
-          )
-        )
-      }
-    })
-  }
-
-  getAll(bname) {
-    const urls = $('.episodes_item a:not(.forDownload)')
-    urls.each((i, el) => {
-      const $el = $(el)
-      const cname = $el.find('.episodes_strong_text').text()
-      this.request($el.attr('href'), bname, cname)
-    })
-  }
-
-  printResults(bname, cname, objs, baseUrl, others) {
-    const output = ('.\\download\\' + bname + '\\' + cname + '\\').replace(
-      /[・]/g,
-      '.'
-    )
-    let outText = 'mkdir "' + output + '"\r\n'
-
-    objs.forEach((obj, i) => {
-      let outName = String(i + 1).padStart(3, '0')
-      const temp = obj.split('.')
-      let ext = temp.length > 1 ? '.' + temp[temp.length - 1] : ''
-      if (ext.indexOf('?') !== -1) {
-        ext = ext.substring(0, ext.indexOf('?'))
-      }
-
-      const inputUrl = baseUrl + obj
-      const outputPath = output + outName + ext
-      outText +=
-        'wget "' + inputUrl + '" -O "' + outputPath + '" ' + others + '\n'
-    })
-
-    console.log(bname + cname + '解析完毕！')
-    return outText
-  }
-}
-
 // ==================== 执行体 ====================
 // 看漫画破解屏蔽
 if (location.host.includes('manhuagui.com')) {
-  if ($.cookie('country') === 'CN' || typeof $.cookie('country') === 'undefined') {
+  if (
+    $.cookie('country') === 'CN' ||
+    typeof $.cookie('country') === 'undefined'
+  ) {
     $.cookie('country', 'HK', { domain: 'manhuagui.com', path: '/' })
     location.reload()
   }
@@ -828,9 +680,4 @@ $(document).ready(function () {
       }
     }
   }
-
-  if (location.host.includes('mangabox')) {
-    new MangaBoxHandler()
-  }
 })
-
