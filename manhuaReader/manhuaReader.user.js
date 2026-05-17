@@ -218,7 +218,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 .vmr-manga-author { margin-top: 6px; font-size: 14px; opacity: 0.9; padding: 0 18px; }
 
 .vmr-manga-desc {
-  margin-top: 6px; padding: 0 18px;  color: var(--vmr-text-secondary);
+  margin-top: 6px; padding: 0 18px;  color: white; opacity: 0.85;
   font-size: 13px; line-height: 1.6; min-height: 1.6em; max-height: 6.4em;
   overflow-y: auto; word-break: break-all; box-sizing: content-box; flex-shrink: 0;
 }
@@ -371,20 +371,6 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 }
 .vmr-pagination-status.vmr-show { transform: translate(0, 0); opacity: 1; }
 
-.vmr-btn-theme-toggle {
-  position: absolute; top: 58px; right: 14px; display: inline-flex;
-  align-items: center; justify-content: center; width: 36px; height: 36px;
-  padding: 0; border-radius: 50%; background: var(--vmr-button-bg);
-  border: 1px solid var(--vmr-button-border); cursor: pointer; font-size: 18px;
-  color: var(--vmr-text-primary); transform: translateX(100%);
-  transition: all 0.3s ease-in-out; opacity: 0; z-index: 980;
-}
-.vmr-btn-theme-toggle.vmr-show { transform: translateX(0); opacity: 1; }
-.vmr-btn-theme-toggle:hover {
-  background: var(--vmr-button-hover-bg); border-color: var(--vmr-button-hover-border);
-  transform: scale(1.1);
-}
-
 .vmr-main-content {
   flex: 1; display: flex; flex-direction: column;
   overflow: hidden; position: relative;
@@ -490,6 +476,44 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 }
 .vmr-settings-content {
   padding: 24px; max-height: 60vh; overflow-y: auto;
+}
+
+.vmr-setting-item {
+  display: grid; grid-template-columns: auto 1fr; gap: 24px;
+  align-items: center; margin-bottom: 24px;
+}
+.vmr-setting-item:last-child {
+  margin-bottom: 0;
+}
+.vmr-setting-label {
+  font-size: 14px; font-weight: 500;
+  color: var(--vmr-text-primary);
+}
+.vmr-setting-options {
+  display: flex; gap: 12px;
+}
+.vmr-radio {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 8px 24px; border-radius: 9999px; cursor: pointer;
+  background: var(--vmr-button-bg); border: 1px solid var(--vmr-button-border);
+  transition: all 0.2s; user-select: none; position: relative;
+}
+.vmr-radio:hover {
+  background: var(--vmr-button-hover-bg); border-color: var(--vmr-button-hover-border);
+}
+.vmr-radio input[type="radio"] {
+  display: none;
+}
+.vmr-radio input[type="radio"]:checked + .vmr-radio-label {
+  color: var(--vmr-button-hover-text); font-weight: bold;
+}
+.vmr-radio:has(input[type="radio"]:checked) {
+  border-color: var(--vmr-active-bg);
+  box-shadow: 0 0 0 1px var(--vmr-active-bg) inset;
+}
+.vmr-radio-label {
+  font-size: 14px; color: var(--vmr-text-primary);
+  cursor: pointer; transition: color 0.2s;
 }
 
 .vmr-reader-close-btn {
@@ -870,7 +894,7 @@ function createVueApp() {
           isSidebarVisible.value = true
 
           setTimeout(() => {
-            isUIVisible.value = false
+            // isUIVisible.value = false
             isSidebarVisible.value = false
             isClickZoneLocked.value = false
           }, CONFIG.AUTO_HIDE_DELAY)
@@ -947,6 +971,10 @@ function createVueApp() {
 
       const toggleTheme = () => {
         theme.value = theme.value === 'light' ? 'dark' : 'light'
+        GM_setValue(CONFIG.THEME_KEY, theme.value)
+      }
+
+      const handleThemeChange = () => {
         GM_setValue(CONFIG.THEME_KEY, theme.value)
       }
 
@@ -1091,6 +1119,7 @@ function createVueApp() {
         toggleSidebar,
         toggleToolbar,
         toggleTheme,
+        handleThemeChange,
         toggleSettings,
         closeSettings,
         closeReader,
@@ -1135,7 +1164,19 @@ function createVueApp() {
               <button class="vmr-settings-close" @click="closeSettings" title="关闭">${getIcon('close')}</button>
             </div>
             <div class="vmr-settings-content">
-              <!-- 设置内容区域 -->
+              <div class="vmr-setting-item">
+                <label class="vmr-setting-label">主题风格</label>
+                <div class="vmr-setting-options">
+                  <label class="vmr-radio">
+                    <input type="radio" name="theme" value="light" v-model="theme" @change="handleThemeChange"/>
+                    <span class="vmr-radio-label">亮色</span>
+                  </label>
+                  <label class="vmr-radio">
+                    <input type="radio" name="theme" value="dark" v-model="theme" @change="handleThemeChange"/>
+                    <span class="vmr-radio-label">暗色</span>
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1184,11 +1225,6 @@ function createVueApp() {
               <span>{{ chapter.current?.name || '未选择章节' }}</span>
             </div>
           </div>
-        </div>
-
-        <div class="vmr-btn-theme-toggle" :class="{ 'vmr-show': isUIVisible }" @click="toggleTheme"
-             :title="theme === 'light' ? '切换到暗色主题' : '切换到亮色主题'">
-          {{ theme === 'light' ? '🌙' : '☀️' }}
         </div>
 
         <div class="vmr-navbar" :class="{ 'vmr-show': isUIVisible }">
