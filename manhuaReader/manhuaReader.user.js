@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vue漫画阅读器
 // @namespace    http://tampermonkey.net/
-// @version      2.0.0
+// @version      2.1.0
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/view/*
@@ -479,7 +479,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 }
 
 .vmr-setting-item {
-  display: grid; grid-template-columns: auto 1fr; gap: 24px;
+  display: grid; grid-template-columns: auto 1fr; gap: 8px 24px;
   align-items: center; margin-bottom: 24px;
 }
 .vmr-setting-item:last-child {
@@ -513,7 +513,11 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 }
 .vmr-radio-label {
   font-size: 14px; color: var(--vmr-text-primary);
-  cursor: pointer; transition: color 0.2s;
+  cursor: pointer;
+}
+.vmr-setting-hint {
+  grid-column: 2; font-size: 12px; line-height: 16px;
+  color: var(--vmr-text-muted); padding-left: 0; 
 }
 
 .vmr-reader-close-btn {
@@ -826,6 +830,11 @@ function createVueApp() {
       // 主题
       const theme = ref(GM_getValue(CONFIG.THEME_KEY, CONFIG.DEFAULT_THEME))
 
+      // 预载数量
+      const preloadCount = ref(
+        GM_getValue('vmr-preload-count', CONFIG.PRELOAD_OFFSET)
+      )
+
       // Toast和对话框
       const toast = reactive({ isVisible: false, message: '', timer: null })
       const confirmDialog = reactive({
@@ -842,8 +851,8 @@ function createVueApp() {
       )
 
       const preloadImages = computed(() => {
-        if (!chapter.current?.images) return []
-        const offset = CONFIG.PRELOAD_OFFSET
+        if (!preloadCount.value || !chapter.current?.images) return []
+        const offset = preloadCount.value
         return Array.from({ length: offset * 2 }, (_, i) => {
           const idx =
             i < offset
@@ -978,6 +987,10 @@ function createVueApp() {
         GM_setValue(CONFIG.THEME_KEY, theme.value)
       }
 
+      const handlePreloadCountChange = () => {
+        GM_setValue('vmr-preload-count', preloadCount.value)
+      }
+
       const toggleSettings = () => {
         isSettingsVisible.value = !isSettingsVisible.value
       }
@@ -1100,6 +1113,7 @@ function createVueApp() {
         isClickZoneLocked,
         isSettingsVisible,
         theme,
+        preloadCount,
         toast,
         confirmDialog,
         totalPages,
@@ -1120,6 +1134,7 @@ function createVueApp() {
         toggleToolbar,
         toggleTheme,
         handleThemeChange,
+        handlePreloadCountChange,
         toggleSettings,
         closeSettings,
         closeReader,
@@ -1176,6 +1191,16 @@ function createVueApp() {
                     <span class="vmr-radio-label">暗色</span>
                   </label>
                 </div>
+              </div>
+              <div class="vmr-setting-item">
+                <label class="vmr-setting-label">预载数量</label>
+                <div class="vmr-setting-options">
+                  <label v-for="n in 6" :key="n - 1" class="vmr-radio">
+                    <input type="radio" name="preloadCount" :value="n - 1" v-model.number="preloadCount" @change="handlePreloadCountChange"/>
+                    <span class="vmr-radio-label">{{ n - 1 }}</span>
+                  </label>
+                </div>
+                <div class="vmr-setting-hint">{{ preloadCount === 0 ? '当前页前后不进行预载' : '当前页前后各预载' + preloadCount + '页' }}</div>
               </div>
             </div>
           </div>
