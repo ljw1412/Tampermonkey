@@ -18,7 +18,7 @@
   - manga: `ref(null)` - 漫画信息
   - chapter: `reactive({ current, previous, next, list })` - 章节信息
   - currentPageIndex: `ref(0)` - 当前页索引
-  - isVisible, isUIVisible, isSidebarVisible: `ref(false)` - UI状态
+  - isVisible, isUIVisible, isSidebarVisible, isSettingsVisible: `ref(false)` - UI状态
   - theme: `ref('light')` - 主题设置
 - **CSS样式提取**：将所有CSS样式提取为 STYLES 常量，便于维护
 - **缓存管理器简化**：优化 CacheManager 类，移除冗余代码和注释
@@ -27,6 +27,31 @@
   - 优化 `extractFromManhuagui()` 缓存策略
   - 统一错误处理和日志输出
 - **网站适配器配置化**：使用 WEBSITE_ADAPTERS 数组管理多网站支持，便于扩展
+- **SVG图标系统**：实现统一的 SVG 图标管理，支持动态属性和样式控制
+
+### 🎨 新功能
+- **阅读器设置弹窗**：新增设置功能，统一管理阅读器配置
+  - 采用 Grid 布局，左侧标签右侧内容，间隔 8px
+  - 主题选择改为按钮样式，选中状态高亮显示
+  - 点击遮罩层或关闭按钮可关闭弹窗
+- **漫画描述展示**：侧边栏新增漫画简介显示区域
+  - 最多显示4行，超出可滚动
+  - 自动适配内容高度，flex布局防坍塌
+  - 无描述时自动隐藏
+- **统一对话框样式**：整合确认对话框和设置弹窗的基础样式
+  - `.vmr-dialog` - 统一的遮罩层和布局
+  - `.vmr-dialog-box` - 统一的对话框盒子样式
+  - 保留各自特有的内容和交互
+
+### 🎨 UI/UX 优化
+- **统一导航按钮样式**：创建 `.vmr-navbar-btn` 统一上一页、下一页、设置按钮样式
+  - 36x36px 圆形按钮
+  - 悬停效果统一
+  - 禁用状态支持
+- **优化漫画描述布局**：解决 flex 布局下的高度坍塌问题
+  - 使用 `box-sizing: content-box` 精确计算高度
+  - 添加 `flex-shrink: 0` 防止压缩
+  - 自定义滚动条样式，透明轨道
 
 ### 🎨 代码质量提升
 - 移除大量冗余注释和未使用的代码

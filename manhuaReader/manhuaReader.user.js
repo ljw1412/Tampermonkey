@@ -475,7 +475,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
   background: var(--vmr-hover-bg); color: var(--vmr-text-primary);
 }
 .vmr-settings-content {
-  padding: 24px; max-height: 60vh; overflow-y: auto;
+  padding: 24px; max-height: 60vh; overflow-y: auto; user-select: none;
 }
 
 .vmr-setting-item {
