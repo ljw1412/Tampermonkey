@@ -294,8 +294,9 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 
 .vmr-navbar {
   position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
-  width: 90%; max-width: 680px; user-select: none; z-index: 990;
-}
+  width: 90%; max-width: 680px; user-select: none; z-index: 990; pointer-events: none;
+  }
+.vmr-navbar.vmr-show { pointer-events: auto; }
 .vmr-progress {
   display: flex; align-items: center; gap: 12px; width: 100%; height: 44px;
   padding: 4px; color: var(--vmr-text-primary); border-radius: 9999px;
