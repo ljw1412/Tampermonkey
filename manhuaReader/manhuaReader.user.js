@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vue漫画阅读器
 // @namespace    http://tampermonkey.net/
-// @version      1.3.0
+// @version      2.0.0
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/view/*
@@ -17,92 +17,73 @@
 
 /* global Vue */
 
+// ==================== 常量配置 ====================
+const CONFIG = {
+  APP_NAME: 'Vue漫画阅读器',
+  CACHE_PREFIX: 'cache_',
+  THEME_KEY: 'vmr-theme',
+  DEFAULT_THEME: 'light',
+  AUTO_HIDE_DELAY: 1000,
+  PRELOAD_OFFSET: 2,
+  TOAST_DURATION: 2000
+}
+
+// ==================== 工具类 ====================
+
 /**
- *  缓存管理器
+ * 缓存管理器
  */
 class CacheManager {
-  /**
-   * 构造器
-   * @param {string} [namespacePrefix='cache_'] - 存储的命名空间前缀
-   */
-  constructor(namespacePrefix = 'cache_') {
-    this.namespacePrefix = namespacePrefix
+  constructor(prefix = CONFIG.CACHE_PREFIX) {
+    this.prefix = prefix
   }
 
-  /**
-   * 设置带过期时间的缓存数据
-   * @param {string} key - 存储的键名
-   * @param {any} data - 要存储的实际数据
-   * @param {number} ttlSeconds - 持续有效的时间（单位：秒）
-   */
   set(key, data, ttlSeconds) {
-    const cacheKey = this.namespacePrefix + key
-    // 内部计算过期时间戳：当前时间 + 持续秒数 * 1000
-    const expireAt = Date.now() + ttlSeconds * 1000
-
-    const cacheData = { data: data, expireAt: expireAt }
-    GM_setValue(cacheKey, cacheData)
+    const cacheKey = this.prefix + key
+    GM_setValue(cacheKey, {
+      data,
+      expireAt: Date.now() + ttlSeconds * 1000
+    })
   }
 
-  /**
-   * 获取缓存数据
-   * @param {string} key - 存储的键名
-   * @returns {any|null} - 返回实际数据，若不存在或已过期则返回 null
-   */
   get(key) {
-    const cacheKey = this.namespacePrefix + key
-    const cacheData = GM_getValue(cacheKey, null)
+    const cacheData = GM_getValue(this.prefix + key, null)
+    if (!cacheData) return null
 
-    // 数据不存在
-    if (cacheData === null) {
-      return null
-    }
-
-    // 检查是否过期
-    const now = Date.now()
-    if (cacheData.expireAt && now > cacheData.expireAt) {
-      this.delete(key) // 已过期，自动删除
+    if (Date.now() > cacheData.expireAt) {
+      this.delete(key)
       return null
     }
 
     return cacheData.data
   }
 
-  /**
-   * 删除指定缓存
-   * @param {string} key - 存储的键名
-   */
   delete(key) {
-    const cacheKey = this.namespacePrefix + key
-    GM_deleteValue(cacheKey)
+    GM_deleteValue(this.prefix + key)
   }
 
-  /**
-   * 清除所有已过期的数据
-   */
   clearExpired() {
-    const allKeys = GM_listValues()
     const now = Date.now()
-    let i = 0
-    allKeys.forEach((key) => {
-      // 只处理带有当前实例命名空间前缀的键
-      if (key.startsWith(this.namespacePrefix)) {
-        const cacheData = GM_getValue(key, null)
-        if (cacheData && cacheData.expireAt && now > cacheData.expireAt) {
+    let count = 0
+
+    GM_listValues().forEach((key) => {
+      if (key.startsWith(this.prefix)) {
+        const data = GM_getValue(key, null)
+        if (data?.expireAt && now > data.expireAt) {
           GM_deleteValue(key)
-          i++
+          count++
         }
       }
     })
-    if (i) console.log(`[Vue漫画阅读器] 删除${i}条过期缓存`)
+
+    if (count) console.log(`[${CONFIG.APP_NAME}] 清理${count}条过期缓存`)
   }
 }
+
 const $cache = new CacheManager()
 
 /**
  * 格式化时间戳
- * @param {number} timestamp - Unix时间戳（秒）
- * @returns {string} 格式化后的日期字符串 (YYYY-MM-DD)
  */
 function formatTimestamp(timestamp) {
   if (!timestamp) return ''
@@ -113,910 +94,653 @@ function formatTimestamp(timestamp) {
   return `${year}-${month}-${day}`
 }
 
-// ============================================
-// UI相关函数
-// ============================================
-
-/**
- * 注入CSS样式
- */
-function injectStyles() {
-  const styles = `
-    .vmr-overflow-hidden {
-      overflow: hidden;
-    }
-
-    .rotate-90 {
-      transform: rotate(90deg);
-    }
-
-    .vmr-icon {
-      display: inline-block;
-      width: 1em;
-      height: 1em;
-      color: inherit;
-      font-style: normal;
-      vertical-align: -2px;
-      outline: none;
-      stroke: currentColor;
-    }
-
-    #vue-manga-reader {
-      font-size: 12px;
-      line-height: 1;
-      font-family: -apple-system, PingFang SC, HarmonyOS_Regular, Roboto, Microsoft YaHei,  Helvetica Neue, Arial, sans-serif !important;
-    }
-
-    #vue-manga-reader * {
-      font-family: -apple-system, PingFang SC, HarmonyOS_Regular, Roboto, Microsoft YaHei,  Helvetica Neue, Arial, sans-serif !important;
-    }
-
-    /* 主题变量 - 亮色主题（默认） */
-    #vue-manga-reader {
-      --vmr-bg-primary: #f5f5f5;
-      --vmr-bg-secondary: #fff;
-      --vmr-bg-overlay: rgba(255, 255, 255, 0.85);
-      --vmr-text-primary: #333;
-      --vmr-text-secondary: #666;
-      --vmr-text-muted: #999;
-      --vmr-border-color: #e0e0e0;
-      --vmr-hover-bg: #f0f0f0;
-      --vmr-active-bg: #667eea;
-      --vmr-active-text: #fff;
-      --vmr-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      --vmr-gradient-start: #667eea;
-      --vmr-gradient-end: #764ba2;
-      --vmr-button-bg: #fff;
-      --vmr-button-border: #ddd;
-      --vmr-button-hover-bg: #f5f5f5;
-      --vmr-button-hover-border: #667eea;
-      --vmr-button-hover-text: #667eea;
-      --vmr-disabled-color: #999;
-      --vmr-disabled-bg: #ccc;
-      --vmr-toast-bg: rgba(0, 0, 0, 0.8);
-      --vmr-dialog-overlay: rgba(0, 0, 0, 0.5);
-      --vmr-dialog-bg: white;
-      --vmr-dialog-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-      --vmr-cancel-btn-bg: #f5f5f5;
-      --vmr-cancel-btn-text: #666;
-      --vmr-cancel-btn-hover: #e0e0e0;
-      --vmr-confirm-btn-bg: #667eea;
-      --vmr-confirm-btn-text: white;
-      --vmr-confirm-btn-hover: #5568d3;
-      --vmr-action-btn-bg: rgba(0,0,0,0.5);
-      --vmr-btn-hover: rgba(0,0,0,0.7);
-      --vmr-scrollbar-track: #f1f1f1;
-      --vmr-scrollbar-thumb: #888;
-      --vmr-scrollbar-thumb-hover: #555;
-    }
-
-    /* 暗色主题 */
-    .manga-reader-container[data-theme="dark"] {
-      --vmr-bg-primary: #1a1a1a;
-      --vmr-bg-secondary: #2d2d2d;
-      --vmr-bg-overlay: rgba(45, 45, 45, 0.85);
-      --vmr-text-primary: #e0e0e0;
-      --vmr-text-secondary: #b0b0b0;
-      --vmr-text-muted: #888;
-      --vmr-border-color: #404040;
-      --vmr-hover-bg: #3d3d3d;
-      --vmr-active-bg: #5568d3;
-      --vmr-active-text: #fff;
-      --vmr-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      --vmr-gradient-start: #5568d3;
-      --vmr-gradient-end: #6a4c93;
-      --vmr-button-bg: #2d2d2d;
-      --vmr-button-border: #404040;
-      --vmr-button-hover-bg: #3d3d3d;
-      --vmr-button-hover-border: #5568d3;
-      --vmr-button-hover-text: #7c8ff5;
-      --vmr-disabled-color: #999;
-      --vmr-disabled-bg: #555;
-      --vmr-toast-bg: rgba(255, 255, 255, 0.9);
-      --vmr-dialog-overlay: rgba(0, 0, 0, 0.7);
-      --vmr-dialog-bg: #2d2d2d;
-      --vmr-dialog-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-      --vmr-cancel-btn-bg: #3d3d3d;
-      --vmr-cancel-btn-text: #b0b0b0;
-      --vmr-cancel-btn-hover: #4d4d4d;
-      --vmr-confirm-btn-bg: #5568d3;
-      --vmr-confirm-btn-text: white;
-      --vmr-confirm-btn-hover: #4a5bc4;
-      --vmr-action-btn-bg: rgba(255,255,255,0.2);
-      --vmr-btn-hover: rgba(255,255,255,0.3);
-      --vmr-scrollbar-track: #2d2d2d;
-      --vmr-scrollbar-thumb: #555;
-      --vmr-scrollbar-thumb-hover: #777;
-    }
-
-    .manga-reader-container {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 999999;
-      display: flex;
-      overflow: hidden;
-      background: var(--vmr-bg-primary);
-      transition: background 0.3s;
-    }
-
-    /* 侧边栏 - 悬浮左侧滑入滑出 */
-    .vmr-sidebar {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 360px;
-      height: 100%;
-      background: var(--vmr-bg-secondary);
-      border-right: 1px solid var(--vmr-border-color);
-      display: flex;
-      flex-direction: column;
-      box-shadow: 2px 0 8px rgba(0,0,0,0.1);
-      z-index: 1000;
-      transform: translateX(-100%);
-      transition: all 0.3s ease-in-out;
-      opacity: 0;
-    }
-
-    .vmr-sidebar.vmr-show {
-      transform: translateX(0);
-      opacity: 1;
-    }
-
-    .vmr-sidebar-header {
-      padding: 14px;
-      background: linear-gradient(135deg, var(--vmr-gradient-start) 0%, var(--vmr-gradient-end) 100%);
-      color: white;
-    }
-
-    .vmr-manga-title {
-      font-size: 18px;
-      font-weight: bold;
-      margin-bottom: 8px;
-      color: inherit;
-      text-decoration: none;
-    }
-
-    a.vmr-manga-title:hover {
-      text-decoration: underline;
-    }
-
-    .vmr-manga-author {
-      margin-top: 4px;
-      font-size: 14px;
-      opacity: 0.9;
-    }
-
-    .vmr-chapter-info {
-      padding: 15px 20px;
-      border-bottom: 1px solid var(--vmr-border-color);
-      background: var(--vmr-bg-primary);
-    }
-
-    .vmr-current-chapter {
-      font-size: 14px;
-      color: var(--vmr-text-primary);
-      margin-bottom: 5px;
-    }
-
-    .vmr-chapter-nav {
-      display: flex;
-      gap: 10px;
-      margin-top: 10px;
-    }
-
-    .vmr-chapter-nav button {
-      flex: 1;
-      padding: 8px 12px;
-      border: none;
-      border-radius: 4px;
-      background: var(--vmr-active-bg);
-      color: white;
-      cursor: pointer;
-      font-size: 13px;
-      transition: all 0.3s;
-    }
-
-    .vmr-chapter-nav button:hover {
-      background: var(--vmr-confirm-btn-hover);
-      transform: translateY(-1px);
-    }
-
-    .vmr-chapter-nav button:disabled {
-      color: var(--vmr-disabled-color);
-      background: var(--vmr-disabled-bg);
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    /* 章节列表 */
-    .vmr-chapter-list {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      column-gap: 6px;
-      row-gap: 6px;
-      padding: 10px;
-      color: var(--vmr-text-primary);
-      overflow-y: auto;
-    }
-
-    .vmr-chapter-item {
-      padding: 12px 15px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-      background: var(--vmr-bg-secondary);
-      border: 1px solid var(--vmr-border-color);
-    }
-
-    .vmr-chapter-item:hover {
-      background: var(--vmr-hover-bg);
-      border-color: var(--vmr-active-bg);
-    }
-
-    .vmr-chapter-item.active {
-      background: var(--vmr-active-bg);
-      color: var(--vmr-active-text);
-      border-color: var(--vmr-active-bg);
-    }
-
-    .vmr-chapter-name {
-      font-size: 14px;
-      font-weight: 500;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-
-    .vmr-chapter-pagecount {
-      font-size: 12px;
-      opacity: 0.75;
-    }
-
-    .vmr-chapter-update-time {
-      font-size: 12px;
-      color: var(--vmr-text-muted);
-      margin-top: 4px;
-    }
-
-    .vmr-chapter-item.active .vmr-chapter-update-time {
-      color: rgba(255,255,255,0.8);
-    }
-
-    /* 工具栏 - 悬浮顶部滑入滑出 */
-    .vmr-toolbar {
-      position: absolute;
-      top: 0;
-      left: 0;
-      height: 64px;
-      padding-left: 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      z-index: 999;
-      transform: translateY(-100%);
-      transition: all 0.3s ease-in-out;
-      opacity: 0;
-    }
-
-    .vmr-toolbar.vmr-show {
-      transform: translateY(0);
-      opacity: 1;
-    }
-
-    .vmr-toolbar.has-sidebar {
-      padding-left: 375px;
-    }
-
-    .vmr-toolbar-left {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .vmr-toolbar button {
-      padding: 8px;
-      cursor: pointer;
-      font-size: 13px;
-      line-height: 1;
-      color: var(--vmr-text-primary);
-      background: var(--vmr-button-bg);
-      border: 1px solid var(--vmr-button-border);
-      border-radius: 9999px;
-      transition: all 0.2s;
-    }
-
-    .vmr-toolbar button:hover {
-      background: var(--vmr-button-hover-bg);
-      border-color: var(--vmr-button-hover-border);
-      color: var(--vmr-button-hover-text);
-      transform: scale(1.1);
-    }
-
-    .vmr-breadcrumb {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 14px;
-      color: var(--vmr-text-primary);
-      backdrop-filter: blur(4px);
-      padding: 8px 16px;
-      background: var(--vmr-bg-overlay);
-      border: 1px solid var(--vmr-border-color);
-      border-radius: 9999px;
-    }
-
-    .vmr-breadcrumb a {
-      color: var(--vmr-text-primary);
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-
-    .vmr-breadcrumb a:hover {
-      color: var(--vmr-active-bg);
-      text-decoration: underline;
-    }
-
-    .vmr-breadcrumb-separator {
-      color: var(--vmr-text-muted);
-    }
-
-    .vmr-navbar {
-      position: absolute;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      width:90%;
-      max-width: 680px;
-      user-select:none;
-      z-index: 990;
-    }
-
-    .vmr-progress {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      width: 100%;
-      height: 44px;
-      padding: 4px;
-      color: var(--vmr-text-primary);
-      border-radius: 9999px;
-      border: 1px solid var(--vmr-border-color);
-      background: var(--vmr-bg-overlay);
-      backdrop-filter: blur(4px);
-      box-sizing: border-box;
-      transform: translateY(100%);
-      opacity: 0;
-      transition: all 0.3s ease-in-out;
-    }
-
-    .vmr-navbar.vmr-show .vmr-progress {
-      transform: translateY(0);
-      opacity: 1;
-    }
-
-    .vmr-progress-perv, .vmr-progress-next {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 36px;
-      height: 36px;
-      font-size: 20px;
-      border-radius: 50%;
-    }
-
-    .vmr-progress-perv .vmr-icon, .vmr-progress-next .vmr-icon{
-      transition: transform 0.3s ease;
-    }
-
-    .vmr-progress-perv.disabled, .vmr-progress-next.disabled {
-      cursor: not-allowed;
-    }
-
-    .vmr-progress-perv.disabled .vmr-icon, .vmr-progress-next.disabled .vmr-icon{
-      opacity: 0.6;
-    }
-
-    .vmr-progress-perv:not(.disabled):hover,
-    .vmr-progress-next:not(.disabled):hover {
-      background: var(--vmr-btn-hover);
-      cursor: pointer;
-    }
-
-    /* 按钮 Tooltip */
-    .vmr-progress-perv,
-    .vmr-progress-next {
-      position: relative;
-    }
-
-    .vmr-button-tooltip {
-      position: absolute;
-      bottom: 100%;
-      left: 50%;
-      transform: translateX(-50%);
-      margin-bottom: 8px;
-      padding: 6px 12px;
-      background: var(--vmr-bg-overlay);
-      backdrop-filter: blur(8px);
-      color: var(--vmr-text-primary);
-      border: 1px solid var(--vmr-border-color);
-      border-radius: 6px;
-      font-size: 12px;
-      white-space: nowrap;
-      pointer-events: none;
-      opacity: 0;
-      visibility: hidden;
-      transition: all 0.2s ease;
-      box-shadow: var(--vmr-shadow);
-      z-index: 1000;
-    }
-
-    .vmr-button-tooltip::after {
-      content: '';
-      position: absolute;
-      top: 100%;
-      left: 50%;
-      transform: translateX(-50%);
-      border: 6px solid transparent;
-      border-top-color: var(--vmr-bg-overlay);
-    }
-
-    .vmr-progress-perv:hover .vmr-button-tooltip,
-    .vmr-progress-next:hover .vmr-button-tooltip {
-      opacity: 1;
-      visibility: visible;
-      transform: translateX(-50%) translateY(-4px);
-    }
-
-    .vmr-progress-status {
-      font-size: 14px;
-      min-width: 64px;
-      text-align: center;
-    }
-
-    .vmr-page-slider {
-      position: relative;
-      flex: 1 1 0%;
-    }
-
-    .vmr-page-slider input {
-      width: 100%;
-      cursor: pointer;
-      height: 6px;
-      accent-color: #fff;
-      background-color: rgba(255, 255, 255, 0.2);
-      border-radius: 9999px;
-    }
-
-    /* 滑块提示框 */
-    .vmr-slider-tooltip {
-      position: absolute;
-      top: -46px;
-      left: var(--slider-position, 0%);
-      transform: translateX(-50%);
-      padding: 6px 12px;
-      background: var(--vmr-bg-overlay);
-      backdrop-filter: blur(8px);
-      color: var(--vmr-text-primary);
-      border: 1px solid var(--vmr-border-color);
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 500;
-      white-space: nowrap;
-      pointer-events: none;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
-      z-index: 1000;
-      box-shadow: var(--vmr-shadow);
-    }
-
-    .vmr-slider-tooltip::after {
-      content: '';
-      position: absolute;
-      top: 100%;
-      left: 50%;
-      transform: translateX(-50%);
-      border: 6px solid transparent;
-      border-top-color: var(--vmr-bg-overlay);
-    }
-
-    .vmr-page-slider:hover .vmr-slider-tooltip {
-      opacity: 1;
-      visibility: visible;
-      transform: translateX(-50%) translateY(-4px);
-    }
-
-    /* 页码状态 */
-    .vmr-pagination-status {
-      position: absolute;
-      bottom: 4px;
-      right: 4px;
-      padding: 4px 12px;
-      font-size: 13px;
-      line-height: 1;
-      color: var(--vmr-text-primary);
-      background: var(--vmr-bg-overlay);
-      backdrop-filter: blur(4px);
-      border: 1px solid var(--vmr-button-border);
-      border-radius: 24px;
-      user-select: none;
-      white-space: nowrap;
-      transform: translate(100%, 100%);
-      transition: all 0.3s ease-in-out;
-      opacity: 0;
-      z-index: 980;
-    }
-
-    .vmr-pagination-status.vmr-show {
-      transform: translate(0, 0);
-      opacity: 1;
-    }
-
-    /* 主题切换 */
-    .vmr-btn-theme-toggle {
-      position: absolute;
-      top: 58px;
-      right: 14px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 36px;
-      height: 36px;
-      padding: 0;
-      border-radius: 50%;
-      background: var(--vmr-button-bg);
-      border: 1px solid var(--vmr-button-border);
-      cursor: pointer;
-      font-size: 18px;
-      color: var(--vmr-text-primary);
-      transform: translateX(100%);
-      transition: all 0.3s ease-in-out;
-      opacity: 0;
-      z-index: 980;
-    }
-
-    .vmr-btn-theme-toggle.vmr-show {
-      transform: translateX(0);
-      opacity: 1;
-    }
-
-    .vmr-btn-theme-toggle:hover {
-      background: var(--vmr-button-hover-bg);
-      border-color: var(--vmr-button-hover-border);
-      transform: scale(1.1);
-    }
-
-    /* 主内容区 - 三等分点击区域 */
-    .vmr-main-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      position: relative;
-    }
-
-    .vmr-click-zones {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      display: flex;
-      z-index: 1;
-    }
-
-    .vmr-click-zone {
-      flex: 1;
-      cursor: pointer;
-      transition: background-color 0.2s;
-    }
-
-    .vmr-click-zone:hover {
-      background-color: rgba(0, 0, 0, 0.02);
-    }
-
-    .vmr-click-zone.left {
-      cursor: url("data:image/svg+xml;base64,PHN2ZyB0PSIxNzc4NzgxOTQ0Njk4IiBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHAtaWQ9IjU3MjAiIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHBhdGggZD0iTTE2MS4xIDUxMS4ybDM3My42LTM3My42YzI2LjQtMjYuNCA2MS0zOS41IDk1LjYtMzkuNSAzNC42IDAgNjkuMiAxMy4yIDk1LjYgMzkuNSA1Mi43IDUyLjcgNTIuNyAxMzguNSAwIDE5MS4yTDQwMC40IDY1NC4zYy0xMC4zIDEwLjMtMjcgMTAuMy0zNy4zIDAtMTAuMy0xMC4zLTEwLjMtMjcgMC0zNy4zbDMyNS40LTMyNS40YzMyLjItMzIuMiAzMi4yLTg0LjUgMC0xMTYuNi0zMi4yLTMyLjItODQuNS0zMi4yLTExNi42IDBMMTk4LjQgNTQ4LjVNNjMwLjMgOTguMSIgZmlsbD0iIzIxOTdFRiIgcC1pZD0iNTcyMSI+PC9wYXRoPjxwYXRoIGQ9Ik0zNzEgMzc1LjlsMzQxLjIgMzQxLjJjNDIuNSA0Mi41IDQyLjUgMTExLjQgMCAxNTMuOXMtMTExLjQgNDIuNS0xNTMuOSAwTDIxNyA1MjkuOSIgZmlsbD0iI0NFRThGQSIgcC1pZD0iNTcyMiI+PC9wYXRoPjxwYXRoIGQ9Ik0xOTguNCA1NDguNWwzMzYuMyAzMzYuM2MyNS41IDI1LjUgNTkuNSAzOS42IDk1LjYgMzkuNiAzNi4xIDAgNzAuMS0xNC4xIDk1LjYtMzkuNiA1Mi43LTUyLjcgNTIuNy0xMzguNSAwLTE5MS4yTDM4OS42IDM1Ny4zbS03NC42IDBsMTcuNCAxNy40IDE5LjggMTkuOCAzMzYuMyAzMzYuM2MzMi4yIDMyLjIgMzIuMiA4NC41IDAgMTE2LjYtMTUuNiAxNS42LTM2LjMgMjQuMi01OC4zIDI0LjJzLTQyLjctOC42LTU4LjMtMjQuMkwyMzUuNyA1MTEuMmwtMjAuNS0yMC41LTE2LjctMTYuNyIgZmlsbD0iIzIxOTdFRiIgcC1pZD0iNTcyMyI+PC9wYXRoPjwvc3ZnPg=="), auto;
-    }
-
-    .vmr-click-zone.center {
-      cursor: pointer;
-    }
-
-    .vmr-click-zone.right {
-      cursor: url("data:image/svg+xml;base64,PHN2ZyB0PSIxNzc4NzgxOTY5MDEwIiBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHAtaWQ9IjEyMjgiIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHBhdGggZD0iTTgzNi44IDU1MS4yTDQ2MiAxNzYuNGMtMzIuMy0zMi4zLTg0LjgtMzIuMy0xMTcgMC0zMi4zIDMyLTMzLjMgODQuOCAwIDExN0w2NzEuNSA2MjBjMTAuMyAxMC4zIDEwLjMgMjcxIDAgMzcuNC0xMC4zIDEwLjMtMjcuMSAxMC4zLTM3LjQgMEwzMDcuNiAzMzAuOGMtNTIuOS01Mi45LTUyLjktMTM5IDAtMTkxLjggMjYuNC0yNi40IDYxLjItMzkuNyA5NS45LTM5LjdzNjkuNSAxMy4yIDk1LjkgMzkuN2wzNzQuOCAzNzQuOE00MDMuNSA5OS4zIiBmaWxsPSIjMjE5N0VGIiBwLWlkPSIxMjI5Ij48L3BhdGg+PHBhdGggZD0iTTgxOC4xIDUzMi41TDQ3NS44IDg3NC45Yy00Mi42IDQyLjYtMTExLjggNDIuNi0xNTQuNCAwLTQyLjctNDIuNi00Mi43LTExMS44IDAtMTU0LjRsMzQyLjQtMzQyLjQiIGZpbGw9IiNDRUU4RkEiIHAtaWQ9IjEyMzAiPjwvcGF0aD48cGF0aCBkPSJNNjQ1IDM1OS40TDMwNy42IDY5Ni44Yy01Mi45IDUyLjktNTIuOSAxMzkgMCAxOTEuOCAyNS42IDI1LjYgNTkuNyAzOS43IDk1LjkgMzkuN3M3MC4zLTE0LjEgOTUuOS0zOS43bDMzNy40LTMzNy40bTAtNzQuOEw4MjAgNDkzLjJsLTIwLjYgMjAuNkw0NjIgODUxLjJjLTE1LjYgMTUuNi0zNi40IDI0LjItNTguNSAyNC4ycy00Mi45LTguNi01OC41LTI0LjJjLTMyLjMtMzIuMy0zMi4zLTg0LjggMC0xMTdsMzM3LjQtMzM3LjQgMTkuOS0xOS45IDE3LjUtMTcuNSIgZmlsbD0iIzIxOTdFRiIgcC1pZD0iMTIzMSI+PC9wYXRoPjwvc3ZnPg=="), auto;
-    }
-
-    /* 图片容器 */
-    .vmr-image-container {
-      flex: 1;
-      display: flex;
-      padding: 0;
-      height: 0;
-      background: var(--vmr-bg-primary);
-      position: relative;
-      z-index: 0;
-    }
-    
-    .vmr-manga-preload {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 0;
-      height: 0;
-      overflow: hidden;
-    }
-
-    .vmr-manga-preload img{
-      width: 0;
-      height: 0;
-    }
-
-    .vmr-manga-page {
-      height: 100%;
-      max-width: 100%;
-      margin: 0 auto;
-      background: var(--vmr-bg-secondary);
-      box-shadow: var(--vmr-shadow);
-      border-radius: 4px;
-      overflow: hidden;
-    }
-
-    .vmr-manga-page img {
-      width: auto;
-      height: 100%;
-      display: block;
-      object-fit: contain;
-    }
-
-    /* 空状态 */
-    .vmr-empty-state {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: var(--vmr-text-muted);
-    }
-
-    .vmr-empty-state-icon {
-      font-size: 64px;
-      margin-bottom: 20px;
-    }
-
-    .vmr-empty-state-text {
-      font-size: 16px;
-    }
-
-    /* 提示框 */
-    .vmr-toast {
-      position: absolute;
-      top: 80px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10000;
-      background-color: var(--vmr-toast-bg);
-      color: var(--vmr-bg-secondary);
-      padding: 10px 20px;
-      border-radius: 4px;
-      font-size: 14px;
-      transition: opacity 0.3s;
-      pointer-events: none;
-      opacity: 0;
-    }
-
-    .vmr-toast.vmr-show {
-      opacity: 1;
-    }
-
-    /* 确认对话框 */
-    .vmr-confirm-dialog {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: var(--vmr-dialog-overlay);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10002;
-      opacity: 0;
-      visibility: hidden;
-      transition: all 0.3s;
-    }
-
-    .vmr-confirm-dialog.vmr-show {
-      opacity: 1;
-      visibility: visible;
-    }
-
-    .vmr-confirm-box {
-      background: var(--vmr-dialog-bg);
-      border-radius: 8px;
-      padding: 24px;
-      min-width: 320px;
-      max-width: 400px;
-      box-shadow: var(--vmr-dialog-shadow);
-      transform: scale(0.9);
-      transition: transform 0.3s;
-    }
-
-    .vmr-confirm-dialog.vmr-show .vmr-confirm-box {
-      transform: scale(1);
-    }
-
-    .vmr-confirm-title {
-      font-size: 18px;
-      font-weight: bold;
-      margin-bottom: 12px;
-      color: var(--vmr-text-primary);
-    }
-
-    .vmr-confirm-message {
-      font-size: 14px;
-      color: var(--vmr-text-secondary);
-      margin-bottom: 24px;
-      line-height: 1.6;
-    }
-
-    .vmr-confirm-buttons {
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-    }
-
-    .vmr-confirm-buttons button {
-      padding: 8px 20px;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: all 0.2s;
-    }
-
-    .vmr-btn-cancel {
-      background: var(--vmr-cancel-btn-bg);
-      color: var(--vmr-cancel-btn-text);
-    }
-
-    .vmr-btn-cancel:hover {
-      background: var(--vmr-cancel-btn-hover);
-    }
-
-    .vmr-btn-confirm {
-      background: var(--vmr-confirm-btn-bg);
-      color: var(--vmr-confirm-btn-text);
-    }
-
-    .vmr-btn-confirm:hover {
-      background: var(--vmr-confirm-btn-hover);
-    }
-
-    /* 关闭按钮 */
-    .vmr-close-btn {
-      position: fixed;
-      top: 14px;
-      right: 14px;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: var(--vmr-action-btn-bg);
-      color: white;
-      border: none;
-      cursor: pointer;
-      font-size: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      z-index: 10001;
-    }
-
-    .vmr-close-btn:hover {
-      background: var(--vmr-btn-hover);
-      transform: rotate(90deg);
-    }
-
-    /* 打开按钮 */
-    .vmr-open-btn {
-      position: fixed;
-      top: 14px;
-      right: 14px;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: var(--vmr-action-btn-bg);
-      color: white;
-      border: none;
-      cursor: pointer;
-      font-size: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      z-index: 999998;
-    }
-
-    .vmr-open-btn:hover {
-      background: var(--vmr-btn-hover);
-      font-size: 30px;
-    }
-
-    /* 滚动条样式 */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: var(--vmr-scrollbar-track);
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: var(--vmr-scrollbar-thumb);
-      border-radius: 4px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: var(--vmr-scrollbar-thumb-hover);
-    }
-  `
-
-  GM_addStyle(styles)
+// ==================== CSS样式 ====================
+const STYLES = `
+.vmr-overflow-hidden { overflow: hidden; }
+.rotate-90 { transform: rotate(90deg); }
+.vmr-icon {
+  display: inline-block; width: 1em; height: 1em; color: inherit;
+  font-style: normal; vertical-align: -2px; outline: none; stroke: currentColor;
 }
 
+#vue-manga-reader {
+  font-size: 12px; line-height: 1;
+  font-family: -apple-system, PingFang SC, HarmonyOS_Regular, Roboto, Microsoft YaHei, Helvetica Neue, Arial, sans-serif !important;
+}
+#vue-manga-reader * {
+  font-family: -apple-system, PingFang SC, HarmonyOS_Regular, Roboto, Microsoft YaHei, Helvetica Neue, Arial, sans-serif !important;
+}
+
+/* 主题变量 - 亮色主题（默认） */
+#vue-manga-reader {
+  --vmr-bg-primary: #f5f5f5;
+  --vmr-bg-secondary: #fff;
+  --vmr-bg-overlay: rgba(255, 255, 255, 0.85);
+  --vmr-text-primary: #333;
+  --vmr-text-secondary: #666;
+  --vmr-text-muted: #999;
+  --vmr-border-color: #e0e0e0;
+  --vmr-hover-bg: #f0f0f0;
+  --vmr-active-bg: #667eea;
+  --vmr-active-text: #fff;
+  --vmr-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  --vmr-gradient-start: #667eea;
+  --vmr-gradient-end: #764ba2;
+  --vmr-button-bg: #fff;
+  --vmr-button-border: #ddd;
+  --vmr-button-hover-bg: #f5f5f5;
+  --vmr-button-hover-border: #667eea;
+  --vmr-button-hover-text: #667eea;
+  --vmr-disabled-color: #999;
+  --vmr-disabled-bg: #ccc;
+  --vmr-toast-bg: rgba(0, 0, 0, 0.8);
+  --vmr-dialog-overlay: rgba(0, 0, 0, 0.5);
+  --vmr-dialog-bg: white;
+  --vmr-dialog-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  --vmr-cancel-btn-bg: #f5f5f5;
+  --vmr-cancel-btn-text: #666;
+  --vmr-cancel-btn-hover: #e0e0e0;
+  --vmr-confirm-btn-bg: #667eea;
+  --vmr-confirm-btn-text: white;
+  --vmr-confirm-btn-hover: #5568d3;
+  --vmr-action-btn-bg: rgba(0,0,0,0.5);
+  --vmr-btn-hover: rgba(0,0,0,0.7);
+  --vmr-scrollbar-track: #f1f1f1;
+  --vmr-scrollbar-thumb: #888;
+  --vmr-scrollbar-thumb-hover: #555;
+}
+
+/* 暗色主题 */
+.manga-reader-container[data-theme="dark"] {
+  --vmr-bg-primary: #1a1a1a;
+  --vmr-bg-secondary: #2d2d2d;
+  --vmr-bg-overlay: rgba(45, 45, 45, 0.85);
+  --vmr-text-primary: #e0e0e0;
+  --vmr-text-secondary: #b0b0b0;
+  --vmr-text-muted: #888;
+  --vmr-border-color: #404040;
+  --vmr-hover-bg: #3d3d3d;
+  --vmr-active-bg: #5568d3;
+  --vmr-active-text: #fff;
+  --vmr-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  --vmr-gradient-start: #5568d3;
+  --vmr-gradient-end: #6a4c93;
+  --vmr-button-bg: #2d2d2d;
+  --vmr-button-border: #404040;
+  --vmr-button-hover-bg: #3d3d3d;
+  --vmr-button-hover-border: #5568d3;
+  --vmr-button-hover-text: #7c8ff5;
+  --vmr-disabled-color: #999;
+  --vmr-disabled-bg: #555;
+  --vmr-toast-bg: rgba(255, 255, 255, 0.9);
+  --vmr-dialog-overlay: rgba(0, 0, 0, 0.7);
+  --vmr-dialog-bg: #2d2d2d;
+  --vmr-dialog-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --vmr-cancel-btn-bg: #3d3d3d;
+  --vmr-cancel-btn-text: #b0b0b0;
+  --vmr-cancel-btn-hover: #4d4d4d;
+  --vmr-confirm-btn-bg: #5568d3;
+  --vmr-confirm-btn-text: white;
+  --vmr-confirm-btn-hover: #4a5bc4;
+  --vmr-action-btn-bg: rgba(255,255,255,0.2);
+  --vmr-btn-hover: rgba(255,255,255,0.3);
+  --vmr-scrollbar-track: #2d2d2d;
+  --vmr-scrollbar-thumb: #555;
+  --vmr-scrollbar-thumb-hover: #777;
+  --vmr-slider-accent-color: #fff;
+}
+
+.manga-reader-container {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  z-index: 999999; display: flex; overflow: hidden;
+  background: var(--vmr-bg-primary); transition: background 0.3s;
+}
+
+.vmr-sidebar {
+  position: absolute; top: 0; left: 0; width: 360px; height: 100%;
+  background: var(--vmr-bg-secondary); border-right: 1px solid var(--vmr-border-color);
+  display: flex; flex-direction: column; box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  z-index: 1000; transform: translateX(-100%); transition: all 0.3s ease-in-out; opacity: 0;
+}
+.vmr-sidebar.vmr-show { transform: translateX(0); opacity: 1; }
+
+.vmr-sidebar-header {
+  padding: 14px;
+  background: linear-gradient(135deg, var(--vmr-gradient-start) 0%, var(--vmr-gradient-end) 100%);
+  color: white;
+}
+.vmr-manga-title {
+  font-size: 18px; font-weight: bold; margin-bottom: 8px;
+  color: inherit; text-decoration: none;
+}
+a.vmr-manga-title:hover { text-decoration: underline; }
+.vmr-manga-author { margin-top: 4px; font-size: 14px; opacity: 0.9; }
+
+.vmr-chapter-info {
+  padding: 15px 20px; border-bottom: 1px solid var(--vmr-border-color);
+  background: var(--vmr-bg-primary);
+}
+.vmr-current-chapter { font-size: 14px; color: var(--vmr-text-primary); margin-bottom: 5px; }
+.vmr-chapter-nav { display: flex; gap: 10px; margin-top: 10px; }
+.vmr-chapter-nav button {
+  flex: 1; padding: 8px 12px; border: none; border-radius: 4px;
+  background: var(--vmr-active-bg); color: white; cursor: pointer;
+  font-size: 13px; transition: all 0.3s;
+}
+.vmr-chapter-nav button:hover { background: var(--vmr-confirm-btn-hover); transform: translateY(-1px); }
+.vmr-chapter-nav button:disabled {
+  color: var(--vmr-disabled-color); background: var(--vmr-disabled-bg);
+  cursor: not-allowed; transform: none;
+}
+
+.vmr-chapter-list {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  column-gap: 6px; row-gap: 6px; padding: 10px;
+  color: var(--vmr-text-primary); overflow-y: auto;
+}
+.vmr-chapter-item {
+  padding: 12px 15px; border-radius: 6px; cursor: pointer;
+  transition: all 0.2s; background: var(--vmr-bg-secondary);
+  border: 1px solid var(--vmr-border-color);
+}
+.vmr-chapter-item:hover { background: var(--vmr-hover-bg); border-color: var(--vmr-active-bg); }
+.vmr-chapter-item.active {
+  background: var(--vmr-active-bg); color: var(--vmr-active-text);
+  border-color: var(--vmr-active-bg);
+}
+.vmr-chapter-name {
+  font-size: 14px; font-weight: 500; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis;
+}
+.vmr-chapter-pagecount { font-size: 12px; opacity: 0.75; }
+.vmr-chapter-update-time { font-size: 12px; color: var(--vmr-text-muted); margin-top: 4px; }
+.vmr-chapter-item.active .vmr-chapter-update-time { color: rgba(255,255,255,0.8); }
+
+.vmr-toolbar {
+  position: absolute; top: 0; left: 0; height: 64px; padding-left: 20px;
+  display: flex; justify-content: space-between; align-items: center;
+  z-index: 999; transform: translateY(-100%); transition: all 0.3s ease-in-out; opacity: 0;
+}
+.vmr-toolbar.vmr-show { transform: translateY(0); opacity: 1; }
+.vmr-toolbar.has-sidebar { padding-left: 375px; }
+.vmr-toolbar-left { display: flex; gap: 10px; align-items: center; }
+.vmr-toolbar button {
+  padding: 8px; cursor: pointer; font-size: 13px; line-height: 1;
+  color: var(--vmr-text-primary); background: var(--vmr-button-bg);
+  border: 1px solid var(--vmr-button-border); border-radius: 9999px; transition: all 0.2s;
+}
+.vmr-toolbar button:hover {
+  background: var(--vmr-button-hover-bg); border-color: var(--vmr-button-hover-border);
+  color: var(--vmr-button-hover-text); transform: scale(1.1);
+}
+.vmr-breadcrumb {
+  flex: 1; display: flex; align-items: center; gap: 8px; font-size: 14px;
+  color: var(--vmr-text-primary); backdrop-filter: blur(4px); padding: 8px 16px;
+  background: var(--vmr-bg-overlay); border: 1px solid var(--vmr-border-color);
+  border-radius: 9999px;
+}
+.vmr-breadcrumb a { color: var(--vmr-text-primary) !important; text-decoration: none; transition: color 0.2s; }
+.vmr-breadcrumb a:hover { color: var(--vmr-active-bg); text-decoration: underline; }
+.vmr-breadcrumb-separator { color: var(--vmr-text-muted); }
+
+.vmr-navbar {
+  position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+  width: 90%; max-width: 680px; user-select: none; z-index: 990;
+}
+.vmr-progress {
+  display: flex; align-items: center; gap: 12px; width: 100%; height: 44px;
+  padding: 4px; color: var(--vmr-text-primary); border-radius: 9999px;
+  border: 1px solid var(--vmr-border-color); background: var(--vmr-bg-overlay);
+  backdrop-filter: blur(4px); box-sizing: border-box;
+  transform: translateY(100%); opacity: 0; transition: all 0.3s ease-in-out;
+}
+.vmr-navbar.vmr-show .vmr-progress { transform: translateY(0); opacity: 1; }
+
+.vmr-progress-perv, .vmr-progress-next {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; font-size: 20px; border-radius: 50%;
+}
+.vmr-progress-perv .vmr-icon, .vmr-progress-next .vmr-icon { transition: transform 0.3s ease; }
+.vmr-progress-perv.disabled, .vmr-progress-next.disabled { cursor: not-allowed; }
+.vmr-progress-perv.disabled .vmr-icon, .vmr-progress-next.disabled .vmr-icon { opacity: 0.6; }
+.vmr-progress-perv:not(.disabled):hover, .vmr-progress-next:not(.disabled):hover {
+  background: var(--vmr-btn-hover); cursor: pointer;
+}
+
+.vmr-progress-perv, .vmr-progress-next { position: relative; }
+.vmr-button-tooltip {
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  margin-bottom: 8px; padding: 6px 12px; background: var(--vmr-bg-overlay);
+  backdrop-filter: blur(8px); color: var(--vmr-text-primary);
+  border: 1px solid var(--vmr-border-color); border-radius: 6px;
+  font-size: 12px; white-space: nowrap; pointer-events: none;
+  opacity: 0; visibility: hidden; transition: all 0.2s ease;
+  box-shadow: var(--vmr-shadow); z-index: 1000;
+}
+.vmr-button-tooltip::after {
+  content: ''; position: absolute; top: 100%; left: 50%;
+  transform: translateX(-50%); border: 6px solid transparent;
+  border-top-color: var(--vmr-bg-overlay);
+}
+.vmr-progress-perv:hover .vmr-button-tooltip, .vmr-progress-next:hover .vmr-button-tooltip {
+  opacity: 1; visibility: visible; transform: translateX(-50%) translateY(-4px);
+}
+
+.vmr-progress-status { font-size: 14px; min-width: 64px; text-align: center; }
+.vmr-page-slider { position: relative; flex: 1 1 0%; }
+.vmr-page-slider input {
+  width: 100%; cursor: pointer; height: 6px; accent-color: var(--vmr-slider-accent-color);
+  background-color: rgba(255, 255, 255, 0.2); border-radius: 9999px;
+}
+
+.vmr-slider-tooltip {
+  position: absolute; top: -46px; left: var(--slider-position, 0%);
+  transform: translateX(-50%); padding: 6px 12px; background: var(--vmr-bg-overlay);
+  backdrop-filter: blur(8px); color: var(--vmr-text-primary);
+  border: 1px solid var(--vmr-border-color); border-radius: 6px;
+  font-size: 13px; font-weight: 500; white-space: nowrap; pointer-events: none;
+  opacity: 0; visibility: hidden; transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+  z-index: 1000; box-shadow: var(--vmr-shadow);
+}
+.vmr-slider-tooltip::after {
+  content: ''; position: absolute; top: 100%; left: 50%;
+  transform: translateX(-50%); border: 6px solid transparent;
+  border-top-color: var(--vmr-bg-overlay);
+}
+.vmr-page-slider:hover .vmr-slider-tooltip {
+  opacity: 1; visibility: visible; transform: translateX(-50%) translateY(-4px);
+}
+
+.vmr-pagination-status {
+  position: absolute; bottom: 4px; right: 4px; padding: 4px 12px;
+  font-size: 13px; line-height: 1; color: var(--vmr-text-primary);
+  background: var(--vmr-bg-overlay); backdrop-filter: blur(4px);
+  border: 1px solid var(--vmr-button-border); border-radius: 24px;
+  user-select: none; white-space: nowrap;
+  transform: translate(100%, 100%); transition: all 0.3s ease-in-out; opacity: 0; z-index: 980;
+}
+.vmr-pagination-status.vmr-show { transform: translate(0, 0); opacity: 1; }
+
+.vmr-btn-theme-toggle {
+  position: absolute; top: 58px; right: 14px; display: inline-flex;
+  align-items: center; justify-content: center; width: 36px; height: 36px;
+  padding: 0; border-radius: 50%; background: var(--vmr-button-bg);
+  border: 1px solid var(--vmr-button-border); cursor: pointer; font-size: 18px;
+  color: var(--vmr-text-primary); transform: translateX(100%);
+  transition: all 0.3s ease-in-out; opacity: 0; z-index: 980;
+}
+.vmr-btn-theme-toggle.vmr-show { transform: translateX(0); opacity: 1; }
+.vmr-btn-theme-toggle:hover {
+  background: var(--vmr-button-hover-bg); border-color: var(--vmr-button-hover-border);
+  transform: scale(1.1);
+}
+
+.vmr-main-content {
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; position: relative;
+}
+.vmr-click-zones {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  display: flex; z-index: 1;
+}
+.vmr-click-zone { flex: 1; cursor: pointer; transition: background-color 0.2s; }
+.vmr-click-zone:hover { background-color: rgba(0, 0, 0, 0.02); }
+.vmr-click-zone.left {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="2"><path d="M15 19l-7-7 7-7"/></svg>') 16 16, w-resize;
+}
+.vmr-click-zone.center { cursor: pointer; }
+.vmr-click-zone.right {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>') 16 16, e-resize;
+}
+
+.vmr-image-container {
+  flex: 1; display: flex; padding: 0; height: 0;
+  background: var(--vmr-bg-primary); position: relative; z-index: 0;
+}
+.vmr-manga-preload {
+  position: absolute; top: 0; left: 0; width: 0; height: 0; overflow: hidden;
+}
+.vmr-manga-preload img { width: 0; height: 0; }
+.vmr-manga-page {
+  height: 100%; max-width: 100%; margin: 0 auto;
+  background: var(--vmr-bg-secondary); box-shadow: var(--vmr-shadow);
+  border-radius: 4px; overflow: hidden;
+}
+.vmr-manga-page img {
+  width: auto; height: 100%; display: block; object-fit: contain;
+}
+
+.vmr-empty-state {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; color: var(--vmr-text-muted);
+}
+.vmr-empty-state-icon { font-size: 64px; margin-bottom: 20px; }
+.vmr-empty-state-text { font-size: 16px; }
+
+.vmr-toast {
+  position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+  z-index: 10000; background-color: var(--vmr-toast-bg); color: var(--vmr-bg-secondary);
+  padding: 10px 20px; border-radius: 4px; font-size: 14px;
+  transition: opacity 0.3s; pointer-events: none; opacity: 0;
+}
+.vmr-toast.vmr-show { opacity: 1; }
+
+.vmr-confirm-dialog {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--vmr-dialog-overlay); display: flex;
+  align-items: center; justify-content: center; z-index: 10002;
+  opacity: 0; visibility: hidden; transition: all 0.3s;
+}
+.vmr-confirm-dialog.vmr-show { opacity: 1; visibility: visible; }
+.vmr-confirm-box {
+  background: var(--vmr-dialog-bg); border-radius: 8px; padding: 24px;
+  min-width: 320px; max-width: 400px; box-shadow: var(--vmr-dialog-shadow);
+  transform: scale(0.9); transition: transform 0.3s;
+}
+.vmr-confirm-dialog.vmr-show .vmr-confirm-box { transform: scale(1); }
+.vmr-confirm-title {
+  font-size: 18px; font-weight: bold; margin-bottom: 12px; color: var(--vmr-text-primary);
+}
+.vmr-confirm-message {
+  font-size: 14px; color: var(--vmr-text-secondary);
+  margin-bottom: 24px; line-height: 1.6;
+}
+.vmr-confirm-buttons { display: flex; gap: 12px; justify-content: flex-end; }
+.vmr-confirm-buttons button {
+  padding: 8px 20px; border: none; border-radius: 4px;
+  cursor: pointer; font-size: 14px; transition: all 0.2s;
+}
+.vmr-btn-cancel { background: var(--vmr-cancel-btn-bg); color: var(--vmr-cancel-btn-text); }
+.vmr-btn-cancel:hover { background: var(--vmr-cancel-btn-hover); }
+.vmr-btn-confirm { background: var(--vmr-confirm-btn-bg); color: var(--vmr-confirm-btn-text); }
+.vmr-btn-confirm:hover { background: var(--vmr-confirm-btn-hover); }
+
+.vmr-close-btn {
+  position: fixed; top: 14px; right: 14px; width: 36px; height: 36px;
+  border-radius: 50%; background: var(--vmr-action-btn-bg); color: white;
+  border: none; cursor: pointer; font-size: 20px; display: flex;
+  align-items: center; justify-content: center; transition: all 0.2s; z-index: 10001;
+}
+.vmr-close-btn:hover { background: var(--vmr-btn-hover); transform: rotate(90deg); }
+
+.vmr-open-btn {
+  position: fixed; top: 14px; right: 14px; width: 36px; height: 36px;
+  border-radius: 50%; background: var(--vmr-action-btn-bg); color: white;
+  border: none; cursor: pointer; font-size: 20px; display: flex;
+  align-items: center; justify-content: center; transition: all 0.2s; z-index: 999998;
+}
+.vmr-open-btn:hover { background: var(--vmr-btn-hover); font-size: 30px; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--vmr-scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--vmr-scrollbar-thumb); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--vmr-scrollbar-thumb-hover); }
+`
+
+// ==================== 数据提取器 ====================
+
 /**
- * 创建应用容器
+ * 从再漫画网站提取数据
  */
-function createAppContainer() {
-  // 如果已存在则先移除，避免重复挂载
-  const existing = document.getElementById('vue-manga-reader')
-  if (existing) {
-    existing.remove()
+function extractFromZaimanhua() {
+  try {
+    const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
+    if (!win.__NUXT__?.data) {
+      console.error('[再漫画适配器] 未找到 __NUXT__ 数据')
+      return null
+    }
+
+    const { getCationDetails, getChapters } = win.__NUXT__.data
+    const comicInfo = getCationDetails?.data?.comicInfo
+    const chapterInfo = getChapters?.data?.chapterInfo
+
+    if (!comicInfo || !chapterInfo) {
+      console.error('[再漫画适配器] 缺少必要数据')
+      return null
+    }
+
+    const manga = {
+      id: comicInfo.id,
+      title: comicInfo.title || '未知标题',
+      author: comicInfo.authorsTagList?.map((a) => a.tagName).join('、'),
+      cover: comicInfo.cover,
+      description: comicInfo.description,
+      url: `${location.origin}/details/${chapterInfo.comic_id}`
+    }
+
+    const current = {
+      id: chapterInfo.chapter_id,
+      name: chapterInfo.title,
+      url: win.location.href,
+      images: chapterInfo.page_url || []
+    }
+    current.pageCount = current.images.length
+
+    // 构建章节列表
+    const chapterListData = comicInfo.chapterList?.[0]?.data || []
+    const list = chapterListData
+      .map((ch) => ({
+        id: ch.chapter_id,
+        name: ch.chapter_title,
+        url: `./${ch.chapter_id}`,
+        updateTime: formatTimestamp(ch.updatetime)
+      }))
+      .sort((a, b) => {
+        const orderA =
+          chapterListData.find((c) => c.chapter_id === a.id)?.chapter_order || 0
+        const orderB =
+          chapterListData.find((c) => c.chapter_id === b.id)?.chapter_order || 0
+        return orderA - orderB
+      })
+
+    const currentIndex = list.findIndex((ch) => ch.id === current.id)
+    const previous = currentIndex > 0 ? list[currentIndex - 1] : null
+    const next = currentIndex < list.length - 1 ? list[currentIndex + 1] : null
+
+    console.log('[再漫画适配器] 数据提取成功:', {
+      manga: manga.title,
+      currentChapter: current.name,
+      totalChapters: list.length,
+      totalPages: current.images.length
+    })
+
+    return { manga, chapter: { current, previous, next, list } }
+  } catch (error) {
+    console.error('[再漫画适配器] 提取失败:', error)
+    return null
   }
-  const container = document.createElement('div')
-  container.id = 'vue-manga-reader'
-  document.body.appendChild(container)
-  return container
 }
 
 /**
- * 初始化Vue应用
+ * 从漫画柜网站提取数据
  */
-function initVueApp() {
+async function extractFromManhuagui() {
+  const evalKeyword = 'window["\\x65\\x76\\x61\\x6c"]'
+
+  try {
+    const scriptElement = Array.from(document.querySelectorAll('script')).find(
+      (s) => s.innerText.includes(evalKeyword)
+    )
+
+    if (!scriptElement) {
+      console.error('[漫画柜适配器] 未找到漫画信息脚本')
+      return null
+    }
+
+    const rawData = new Function(
+      'return ' + scriptElement.innerText.replace(evalKeyword, '')
+    )()
+    const jsonStr = rawData.substring(
+      rawData.indexOf('{'),
+      rawData.lastIndexOf('}') + 1
+    )
+    const chapterInfo = JSON.parse(jsonStr)
+    const pageVariables = unsafeWindow.pVars
+
+    if (!chapterInfo || !pageVariables) {
+      console.error('[漫画柜适配器] 缺少必要数据')
+      return null
+    }
+
+    const { bid, bname, bpic, cid, cname, len, files, sl, prevId, nextId } =
+      chapterInfo
+
+    const manga = {
+      id: bid,
+      title: bname || '未知标题',
+      author: '未知作者',
+      cover: bpic ? `https://cf.mhgui.com/cpic/h/${bpic}` : '',
+      description: '',
+      url: '.'
+    }
+
+    const current = {
+      id: cid + '',
+      name: cname,
+      url: window.location.href,
+      images: files.map(
+        (f) => `${pageVariables.manga.filePath}${f}?e=${sl.e}&m=${sl.m}`
+      ),
+      pageCount: len
+    }
+
+    let previous = prevId
+      ? { id: prevId, name: '上一章', url: `./${prevId}.html` }
+      : null
+    let next = nextId
+      ? { id: nextId, name: '下一章', url: `./${nextId}.html` }
+      : null
+
+    // 尝试从缓存或详情页获取章节列表
+    const cacheKey = `manhuagui-${manga.id}`
+    const cache = $cache.get(cacheKey)
+    const list = cache?.chapters || []
+    let author = cache?.author || ''
+
+    if (cache) {
+      console.log(`[漫画柜适配器] 使用缓存<${cacheKey}>`)
+    } else {
+      try {
+        console.log('[漫画柜适配器] 从详情页提取章节列表')
+        const resp = await fetch(manga.url)
+        const html = await resp.text()
+        const doc = new DOMParser().parseFromString(html, 'text/html')
+
+        // 提取作者
+        const authorEl = Array.from(
+          doc.querySelectorAll('.book-detail .detail-list li span strong')
+        ).find((el) => el.innerText.includes('作者'))
+
+        if (authorEl) {
+          author = Array.from(authorEl.parentElement.childNodes)
+            .filter((n) => n !== authorEl)
+            .map((n) => n.textContent)
+            .join('')
+        }
+
+        // 提取章节列表
+        const chapters = Array.from(
+          doc.querySelectorAll('.chapter .chapter-list')
+        )
+          .reverse()
+          .flatMap((cl) => Array.from(cl.querySelectorAll('ul')))
+          .flatMap((ul) => Array.from(ul.querySelectorAll('li a')).reverse())
+          .map((item) => {
+            const url = item.href
+            const pageCount =
+              parseInt(item.querySelector('i')?.innerText) || null
+            const idMatched = url.match(/\/comic\/\d+\/(\d+).html/)
+            return {
+              id: idMatched ? idMatched[1] : url,
+              name: item.title,
+              url,
+              pageCount
+            }
+          })
+
+        list.push(...chapters)
+      } catch (error) {
+        console.warn('[漫画柜适配器] 提取章节列表失败:', error)
+      }
+    }
+
+    if (author) manga.author = author
+
+    if (list.length > 0) {
+      const currentIndex = list.findIndex((ch) => ch.id === current.id)
+      if (currentIndex > 0) previous = list[currentIndex - 1]
+      if (currentIndex < list.length - 1) next = list[currentIndex + 1]
+
+      if (!cache) {
+        $cache.set(cacheKey, { author, chapters: list }, 3600)
+        console.log(`[漫画柜适配器] 保存缓存`, { author, chapters: list })
+      }
+    } else {
+      list.push(current)
+    }
+
+    console.log('[漫画柜适配器] 数据提取成功:', {
+      manga: manga.title,
+      currentChapter: current.name,
+      totalChapters: list.length,
+      totalPages: current.images.length
+    })
+
+    return { manga, chapter: { current, previous, next, list } }
+  } catch (error) {
+    console.error('[漫画柜适配器] 提取失败:', error)
+    return null
+  }
+}
+
+// ==================== 网站适配器配置 ====================
+const WEBSITE_ADAPTERS = [
+  {
+    name: '再漫画',
+    host: 'zaimanhua.com',
+    pathnameRegEx: /^\/view\//,
+    extract: extractFromZaimanhua
+  },
+  {
+    name: '漫画柜',
+    host: 'manhuagui.com',
+    pathnameRegEx: /^\/comic\/\d+\/\d+.html/,
+    extract: extractFromManhuagui
+  }
+]
+
+// ==================== Vue应用 ====================
+function createVueApp() {
   const { createApp, ref, computed, reactive, watch } = Vue
 
-  const app = createApp({
+  return createApp({
     setup() {
-      // 响应式数据 - 优化后的结构
+      // 漫画信息
       const manga = ref(null)
+
+      // 章节信息
       const chapter = reactive({
-        current: null, // 当前章节
-        previous: null, // 上一章
-        next: null, // 下一章
-        list: [] // 章节列表
+        current: null,
+        previous: null,
+        next: null,
+        list: []
       })
+
+      // 页面状态
       const currentPageIndex = ref(0)
-      // 滑块专用变量，用于双向绑定，避免闪烁
       const sliderValue = ref(1)
+
+      // UI状态
       const isVisible = ref(false)
       const isUIVisible = ref(false)
       const isSidebarVisible = ref(false)
       const isClickZoneLocked = ref(false)
 
-      // Toast 提示框状态
-      const toast = reactive({
-        isVisible: false,
-        message: '',
-        timer: null
-      })
+      // 主题
+      const theme = ref(GM_getValue(CONFIG.THEME_KEY, CONFIG.DEFAULT_THEME))
 
-      // 确认对话框状态
+      // Toast和对话框
+      const toast = reactive({ isVisible: false, message: '', timer: null })
       const confirmDialog = reactive({
         isVisible: false,
         title: '',
@@ -1024,64 +748,38 @@ function initVueApp() {
         callback: null
       })
 
-      // 主题状态 - 从持久化存储加载
-      const theme = ref(GM_getValue('vmr-theme', 'light'))
-
-      // 切换主题
-      const toggleTheme = () => {
-        theme.value = theme.value === 'light' ? 'dark' : 'light'
-        GM_setValue('vmr-theme', theme.value)
-      }
-
       // 计算属性
-      const totalPages = computed(() => {
-        return chapter.current?.images?.length || 0
-      })
-
-      const currentImage = computed(() => {
-        if (!chapter.current?.images) return null
-        return chapter.current.images[currentPageIndex.value]
-      })
+      const totalPages = computed(() => chapter.current?.images?.length || 0)
+      const currentImage = computed(
+        () => chapter.current?.images?.[currentPageIndex.value]
+      )
 
       const preloadImages = computed(() => {
         if (!chapter.current?.images) return []
-        const offset = 2 // 即当前图片前offset个和后offset个
+        const offset = CONFIG.PRELOAD_OFFSET
         return Array.from({ length: offset * 2 }, (_, i) => {
-          return i < offset
-            ? chapter.current.images[currentPageIndex.value + i - offset]
-            : chapter.current.images[currentPageIndex.value + i - offset + 1]
-        }).filter((i) => i)
+          const idx =
+            i < offset
+              ? currentPageIndex.value + i - offset
+              : currentPageIndex.value + i - offset + 1
+          return chapter.current.images[idx]
+        }).filter(Boolean)
       })
 
-      const hasNextChapter = computed(() => {
-        return !!chapter.next
-      })
+      const hasNextChapter = computed(() => !!chapter.next)
+      const hasPrevChapter = computed(() => !!chapter.previous)
+      const isFirstPage = computed(() => currentPageIndex.value === 0)
+      const isLastPage = computed(
+        () => currentPageIndex.value >= totalPages.value - 1
+      )
 
-      const hasPrevChapter = computed(() => {
-        return !!chapter.previous
-      })
-
-      const isFirstPage = computed(() => {
-        return currentPageIndex.value === 0
-      })
-
-      const isLastPage = computed(() => {
-        return currentPageIndex.value >= totalPages.value - 1
-      })
-
-      // 上一页按钮的 tooltip 文本
       const prevButtonTooltip = computed(() => {
-        if (isFirstPage.value) {
-          return hasPrevChapter.value ? '上一章' : '到头了'
-        }
+        if (isFirstPage.value) return hasPrevChapter.value ? '上一章' : '到头了'
         return '上一页'
       })
 
-      // 下一页按钮的 tooltip 文本
       const nextButtonTooltip = computed(() => {
-        if (isLastPage.value) {
-          return hasNextChapter.value ? '下一章' : '到头了'
-        }
+        if (isLastPage.value) return hasNextChapter.value ? '下一章' : '到头了'
         return '下一页'
       })
 
@@ -1089,32 +787,21 @@ function initVueApp() {
       const setData = (data) => {
         console.log('[Vue漫画阅读器] 接收到数据:', data)
 
-        // 设置漫画信息（简化为manga）
-        if (data.manga) {
-          manga.value = data.manga
-        }
-
-        // 设置章节信息（整合为chapter对象）
+        if (data.manga) manga.value = data.manga
         if (data.chapter) {
           if (data.chapter.current) {
             chapter.current = data.chapter.current
             currentPageIndex.value = 0
           }
-          if (data.chapter.previous !== undefined) {
+          if (data.chapter.previous !== undefined)
             chapter.previous = data.chapter.previous
-          }
-          if (data.chapter.next !== undefined) {
-            chapter.next = data.chapter.next
-          }
-          if (data.chapter.list) {
-            chapter.list = data.chapter.list
-          }
+          if (data.chapter.next !== undefined) chapter.next = data.chapter.next
+          if (data.chapter.list) chapter.list = data.chapter.list
         }
 
         isVisible.value = true
-
         isClickZoneLocked.value = true
-        // 首次进入时显示侧边栏和工具栏3秒后自动隐藏
+
         setTimeout(() => {
           isUIVisible.value = true
           isSidebarVisible.value = true
@@ -1123,7 +810,7 @@ function initVueApp() {
             isUIVisible.value = false
             isSidebarVisible.value = false
             isClickZoneLocked.value = false
-          }, 1000)
+          }, CONFIG.AUTO_HIDE_DELAY)
         }, 100)
       }
 
@@ -1137,7 +824,6 @@ function initVueApp() {
         if (currentPageIndex.value < totalPages.value - 1) {
           currentPageIndex.value++
         } else if (hasNextChapter.value) {
-          // 显示确认对话框
           showConfirmDialog(
             '跳转到下一章',
             `是否跳转到下一章《${chapter.next?.name || ''}》？`,
@@ -1154,7 +840,6 @@ function initVueApp() {
         if (currentPageIndex.value > 0) {
           currentPageIndex.value--
         } else if (hasPrevChapter.value) {
-          // 显示确认对话框
           showConfirmDialog(
             '跳转到上一章',
             `是否跳转到上一章《${chapter.previous?.name || ''}》？`,
@@ -1168,29 +853,23 @@ function initVueApp() {
       }
 
       const loadChapter = (chapterData) => {
-        if (!chapterData || !chapterData.url) return
-
-        // 直接跳转到新章节的URL
-        window.location.href = chapterData.url
+        if (chapterData?.url) window.location.href = chapterData.url
       }
 
-      // 显示确认对话框
       const showConfirmDialog = (title, message, callback) => {
-        confirmDialog.title = title
-        confirmDialog.message = message
-        confirmDialog.callback = callback
-        confirmDialog.isVisible = true
+        Object.assign(confirmDialog, {
+          title,
+          message,
+          callback,
+          isVisible: true
+        })
       }
 
-      // 确认操作
       const handleConfirm = () => {
         confirmDialog.isVisible = false
-        if (confirmDialog.callback) {
-          confirmDialog.callback()
-        }
+        confirmDialog.callback?.()
       }
 
-      // 取消操作
       const handleCancel = () => {
         confirmDialog.isVisible = false
         confirmDialog.callback = null
@@ -1199,48 +878,37 @@ function initVueApp() {
       const toggleSidebar = () => {
         isSidebarVisible.value = !isSidebarVisible.value
       }
-
       const toggleToolbar = () => {
         isUIVisible.value = !isUIVisible.value
+      }
+
+      const toggleTheme = () => {
+        theme.value = theme.value === 'light' ? 'dark' : 'light'
+        GM_setValue(CONFIG.THEME_KEY, theme.value)
       }
 
       const closeReader = () => {
         isVisible.value = false
       }
-
       const openReader = () => {
         isVisible.value = true
       }
 
       const handleLeftClick = () => {
-        if (isClickZoneLocked.value) return
-        prevPage()
+        if (!isClickZoneLocked.value) prevPage()
       }
-
       const handleCenterClick = () => {
-        if (isClickZoneLocked.value) return
-        toggleToolbar()
+        if (!isClickZoneLocked.value) toggleToolbar()
       }
-
       const handleRightClick = () => {
-        if (isClickZoneLocked.value) return
-        nextPage()
+        if (!isClickZoneLocked.value) nextPage()
       }
 
-      const handleProgressChange = (event) => {
-        // event.target.value 是字符串,且对应的是 min=1 的值
-        const newIndex = parseInt(event.target.value, 10) - 1
-        goToPage(newIndex)
-      }
-
-      // 滑块提示相关 - 仅用于更新CSS变量
       const handleSliderInput = (event) => {
         const value = parseInt(event.target.value, 10)
         const min = parseInt(event.target.min, 10)
         const max = parseInt(event.target.max, 10)
         const percentage = ((value - min) / (max - min)) * 100
-
-        // 更新CSS变量来控制tooltip位置
         event.target.parentElement.style.setProperty(
           '--slider-position',
           `${percentage}%`
@@ -1248,31 +916,22 @@ function initVueApp() {
       }
 
       const handleSliderChange = (event) => {
-        const value = parseInt(event.target.value, 10)
-        goToPage(value - 1)
+        goToPage(parseInt(event.target.value, 10) - 1)
       }
 
-      // 显示提示框
-      const showToast = (message, duration = 2000) => {
+      const showToast = (message, duration = CONFIG.TOAST_DURATION) => {
         toast.message = message
         toast.isVisible = true
-
-        if (toast.timer) {
-          clearTimeout(toast.timer)
-        }
-
+        if (toast.timer) clearTimeout(toast.timer)
         toast.timer = setTimeout(() => {
           toast.isVisible = false
         }, duration)
       }
 
-      // 键盘事件
+      // 键盘事件处理
       const handleKeydown = (event) => {
         if (!isVisible.value) return
 
-        // 放行条件：
-        // 1. 功能键 F1-F12
-        // 2. 修饰键组合 (Shift, Ctrl, Alt, Meta)
         const isFunctionKey =
           event.key.startsWith('F') &&
           event.key.length >= 2 &&
@@ -1281,7 +940,6 @@ function initVueApp() {
           event.shiftKey || event.ctrlKey || event.altKey || event.metaKey
         if (isFunctionKey || hasModifier) return
 
-        // 阻止默认行为和事件传播
         event.preventDefault()
         event.stopPropagation()
         event.stopImmediatePropagation()
@@ -1294,84 +952,59 @@ function initVueApp() {
             prevPage()
             break
           case 'Escape':
-            // 如果确认对话框显示，先关闭它
-            if (confirmDialog.isVisible) {
-              handleCancel()
-            } else if (isSidebarVisible.value) {
-              isSidebarVisible.value = false
-            } else {
-              isUIVisible.value = false
-            }
+            if (confirmDialog.isVisible) handleCancel()
+            else if (isSidebarVisible.value) isSidebarVisible.value = false
+            else isUIVisible.value = false
             break
         }
       }
 
-      // 监听键盘事件（使用捕获阶段，优先级最高）
       document.addEventListener('keydown', handleKeydown, true)
 
-      // 同步 currentPageIndex 到 sliderValue
-      watch(
-        () => currentPageIndex.value,
-        (newIndex) => {
-          sliderValue.value = newIndex + 1
-          // 同时更新滑块tooltip的位置
-          updateSliderPosition(newIndex + 1)
-        }
-      )
+      // 监听器
+      watch(currentPageIndex, (newIndex) => {
+        sliderValue.value = newIndex + 1
+        updateSliderPosition(newIndex + 1)
+      })
 
-      // 更新滑块tooltip位置的辅助函数
+      watch(isVisible, (v) => {
+        document.documentElement.classList.toggle('vmr-overflow-hidden', v)
+      })
+
+      watch(totalPages, (newTotal) => {
+        if (newTotal > 0) {
+          setTimeout(() => updateSliderPosition(currentPageIndex.value + 1), 0)
+        }
+      })
+
       const updateSliderPosition = (value) => {
-        const sliderElement = document.querySelector('.vmr-page-slider input')
-        if (sliderElement) {
-          const min = parseInt(sliderElement.min, 10) || 1
-          const max = parseInt(sliderElement.max, 10) || 1
+        const slider = document.querySelector('.vmr-page-slider input')
+        if (slider) {
+          const min = parseInt(slider.min, 10) || 1
+          const max = parseInt(slider.max, 10) || 1
           const percentage = ((value - min) / (max - min)) * 100
-          sliderElement.parentElement.style.setProperty(
+          slider.parentElement.style.setProperty(
             '--slider-position',
             `${percentage}%`
           )
         }
       }
 
-      watch(
-        () => isVisible.value,
-        (v) => {
-          if (v) {
-            document.documentElement.classList.add('vmr-overflow-hidden')
-          } else {
-            document.documentElement.classList.remove('vmr-overflow-hidden')
-          }
-        }
-      )
-
-      // 监听 totalPages 变化，初始化滑块位置
-      watch(
-        () => totalPages.value,
-        (newTotal) => {
-          if (newTotal > 0) {
-            // 延迟执行，确保 DOM 已更新
-            setTimeout(() => {
-              updateSliderPosition(currentPageIndex.value + 1)
-            }, 0)
-          }
-        }
-      )
-
       return {
         manga,
         chapter,
         currentPageIndex,
-        currentImage,
-        preloadImages,
-        totalPages,
+        sliderValue,
         isVisible,
         isUIVisible,
         isSidebarVisible,
         isClickZoneLocked,
+        theme,
         toast,
         confirmDialog,
-        theme,
-        sliderValue,
+        totalPages,
+        currentImage,
+        preloadImages,
         hasNextChapter,
         hasPrevChapter,
         isFirstPage,
@@ -1391,7 +1024,6 @@ function initVueApp() {
         handleLeftClick,
         handleCenterClick,
         handleRightClick,
-        handleProgressChange,
         handleSliderInput,
         handleSliderChange,
         showToast,
@@ -1402,20 +1034,13 @@ function initVueApp() {
     },
 
     template: `
-        <!-- 打开按钮（阅读器关闭时显示） -->
-        <div v-if="!isVisible" class="vmr-open-btn" @click="openReader" title="打开阅读器">📖</div>
+      <div v-if="!isVisible" class="vmr-open-btn" @click="openReader" title="打开阅读器">📖</div>
 
-        <!-- 阅读器容器 -->
-        <div v-if="isVisible" class="manga-reader-container" :data-theme="theme">
-          <!-- 关闭按钮 -->
-          <div class="vmr-close-btn" @click="closeReader" title="关闭">×</div>
+      <div v-if="isVisible" class="manga-reader-container" :data-theme="theme">
+        <div class="vmr-close-btn" @click="closeReader" title="关闭">×</div>
 
-        <!-- 提示框 -->
-        <div class="vmr-toast" :class="{ 'vmr-show': toast.isVisible }">
-          {{ toast.message }}
-        </div>
+        <div class="vmr-toast" :class="{ 'vmr-show': toast.isVisible }">{{ toast.message }}</div>
 
-        <!-- 确认对话框 -->
         <div class="vmr-confirm-dialog" :class="{ 'vmr-show': confirmDialog.isVisible }" @click.self="handleCancel">
           <div class="vmr-confirm-box">
             <div class="vmr-confirm-title">{{ confirmDialog.title }}</div>
@@ -1427,7 +1052,6 @@ function initVueApp() {
           </div>
         </div>
 
-        <!-- 侧边栏 -->
         <div class="vmr-sidebar" :class="{ 'vmr-show': isUIVisible && isSidebarVisible }">
           <div class="vmr-sidebar-header">
             <a v-if="manga?.url" class="vmr-manga-title" :href="manga.url" target="_blank" rel="noopener noreferrer">{{ manga?.title || '未加载漫画' }}</a>
@@ -1438,49 +1062,26 @@ function initVueApp() {
           <div class="vmr-chapter-info">
             <div class="vmr-current-chapter">
               当前: {{ chapter.current?.name || '未选择' }}
-              <span v-if="chapter.current?.pageCount" class="vmr-chapter-pagecount">
-                {{ chapter.current.pageCount }}P
-              </span>
+              <span v-if="chapter.current?.pageCount" class="vmr-chapter-pagecount">{{ chapter.current.pageCount }}P</span>
             </div>
             <div class="vmr-chapter-nav">
-              <button
-                :disabled="!hasPrevChapter"
-                @click="loadChapter(chapter.previous)"
-              >
-                ← 上一章
-              </button>
-              <button
-                :disabled="!hasNextChapter"
-                @click="loadChapter(chapter.next)"
-              >
-                下一章 →
-              </button>
+              <button :disabled="!hasPrevChapter" @click="loadChapter(chapter.previous)">← 上一章</button>
+              <button :disabled="!hasNextChapter" @click="loadChapter(chapter.next)">下一章 →</button>
             </div>
           </div>
 
           <div class="vmr-chapter-list">
-            <div
-              v-for="(ch, index) in chapter.list"
-              :key="ch.id"
-              class="vmr-chapter-item"
-              :class="{ active: chapter.current?.id === ch.id }"
-              :title="ch.name"
-              @click="loadChapter(ch)"
-            >
+            <div v-for="ch in chapter.list" :key="ch.id" class="vmr-chapter-item"
+                 :class="{ active: chapter.current?.id === ch.id }" :title="ch.name" @click="loadChapter(ch)">
               <div class="vmr-chapter-name">
                 {{ ch.name }}
-                <span v-if="ch.pageCount" class="vmr-chapter-pagecount">
-                  {{ ch.pageCount }}P
-                </span>
+                <span v-if="ch.pageCount" class="vmr-chapter-pagecount">{{ ch.pageCount }}P</span>
               </div>
-              <div class="vmr-chapter-update-time" v-if="ch.updateTime">
-                  {{ ch.updateTime }}
-              </div>
+              <div class="vmr-chapter-update-time" v-if="ch.updateTime">{{ ch.updateTime }}</div>
             </div>
           </div>
         </div>
 
-        <!-- 工具栏 -->
         <div class="vmr-toolbar" :class="{ 'vmr-show': isUIVisible, 'has-sidebar': isSidebarVisible }">
           <div class="vmr-toolbar-left">
             <button @click="toggleSidebar" :title="isSidebarVisible ? '隐藏侧边栏' : '显示侧边栏'">
@@ -1495,52 +1096,43 @@ function initVueApp() {
           </div>
         </div>
 
-        <!-- 主题切换 -->
-        <div class="vmr-btn-theme-toggle" :class="{ 'vmr-show': isUIVisible }" @click="toggleTheme" :title="theme === 'light' ? '切换到暗色主题' : '切换到亮色主题'">
+        <div class="vmr-btn-theme-toggle" :class="{ 'vmr-show': isUIVisible }" @click="toggleTheme"
+             :title="theme === 'light' ? '切换到暗色主题' : '切换到亮色主题'">
           {{ theme === 'light' ? '🌙' : '☀️' }}
         </div>
 
-        <!-- 底部导航栏 -->
         <div class="vmr-navbar" :class="{ 'vmr-show': isUIVisible }">
-
           <div class="vmr-progress">
-            <div class="vmr-progress-perv" :class="{
-              disabled: currentPageIndex <= 0 && !hasPrevChapter
-            }" @click="prevPage">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-left" :class="{ 'rotate-90': currentPageIndex <= 0 }" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="M32 8.4 16.444 23.956 32 39.513"></path></svg>
+            <div class="vmr-progress-perv" :class="{ disabled: currentPageIndex <= 0 && !hasPrevChapter }" @click="prevPage">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"
+                   class="vmr-icon vmr-icon-left" :class="{ 'rotate-90': currentPageIndex <= 0 }"
+                   stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter">
+                <path d="M32 8.4 16.444 23.956 32 39.513"></path>
+              </svg>
               <div class="vmr-button-tooltip">{{ prevButtonTooltip }}</div>
             </div>
-            <div class="vmr-progress-status">
-              {{ currentPageIndex + 1 }} / {{ totalPages }}
-            </div>
+            <div class="vmr-progress-status">{{ currentPageIndex + 1 }} / {{ totalPages }}</div>
             <div class="vmr-page-slider">
-              <input 
-                type="range" 
-                min="1" 
-                :max="totalPages" 
-                v-model.number="sliderValue"
-                @input="handleSliderInput"
-                @change="handleSliderChange"
-              />
+              <input type="range" min="1" :max="totalPages" v-model.number="sliderValue"
+                     @input="handleSliderInput" @change="handleSliderChange"/>
               <div class="vmr-slider-tooltip">{{ sliderValue }}</div>
             </div>
-            <div class="vmr-progress-next" :class="{ 
-              disabled: currentPageIndex >= totalPages - 1 && !hasNextChapter
-            }" @click="nextPage">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-right" :class="{ 'rotate-90': currentPageIndex >= totalPages - 1 }" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="m16 39.513 15.556-15.557L16 8.4"></path></svg>
+            <div class="vmr-progress-next" :class="{ disabled: currentPageIndex >= totalPages - 1 && !hasNextChapter }" @click="nextPage">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"
+                   class="vmr-icon vmr-icon-right" :class="{ 'rotate-90': currentPageIndex >= totalPages - 1 }"
+                   stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter">
+                <path d="m16 39.513 15.556-15.557L16 8.4"></path>
+              </svg>
               <div class="vmr-button-tooltip">{{ nextButtonTooltip }}</div>
             </div>
           </div>
         </div>
 
-        <!-- 页码状态 -->
         <div class="vmr-pagination-status" :class="{ 'vmr-show': !isUIVisible }">
           {{ currentPageIndex + 1 }} / {{ totalPages }}
         </div>
 
-        <!-- 主内容区 -->
         <div class="vmr-main-content">
-          <!-- 三等分点击区域 -->
           <div class="vmr-click-zones">
             <div class="vmr-click-zone left" @click="handleLeftClick"></div>
             <div class="vmr-click-zone center" @click="handleCenterClick"></div>
@@ -1565,12 +1157,9 @@ function initVueApp() {
       </div>
     `
   })
-
-  // 将Vue实例保存到window，方便外部调用
-  window.$app = app
-  return app
 }
 
+// ==================== 全局API ====================
 function setMangaData(data) {
   if (window.$vm) {
     window.$vm.setData(data)
@@ -1580,330 +1169,23 @@ function setMangaData(data) {
   }
 }
 
-/**
- * 暴露全局API
- */
 function exposeGlobalAPI() {
   const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
   win.$setMangaData = setMangaData
   console.log('[Vue漫画阅读器] 全局API已暴露: $setMangaData')
 }
 
-// ============================================
-// 网站适配器函数
-// ============================================
-
-/**
- * 从再漫画网站提取数据
- * @returns {Object|null} 转换后的漫画数据，失败返回null
- */
-function extractDataFromZaimanhua() {
-  try {
-    // 使用 unsafeWindow 访问原网站的 window 对象
-    const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
-
-    // 检查是否有必要的数据
-    if (!win.__NUXT__ || !win.__NUXT__.data) {
-      console.error('[再漫画适配器] 未找到 __NUXT__ 数据')
-      return null
-    }
-
-    const nuxtData = win.__NUXT__.data
-
-    // 提取漫画基本信息
-    const comicInfo = nuxtData.getCationDetails?.data?.comicInfo
-    if (!comicInfo) {
-      console.error('[再漫画适配器] 未找到漫画信息')
-      return null
-    }
-
-    const manga = {
-      id: comicInfo.id,
-      title: comicInfo.title || '未知标题',
-      author: comicInfo.authorsTagList
-        ?.map((author) => author.tagName)
-        .join('、'),
-      cover: comicInfo.cover,
-      description: comicInfo.description
-    }
-
-    // 提取当前章节信息
-    const chapterInfo = nuxtData.getChapters?.data?.chapterInfo
-    if (!chapterInfo) {
-      console.error('[再漫画适配器] 未找到章节信息')
-      return null
-    }
-
-    manga.url = `${location.origin}/details/${chapterInfo.comic_id}`
-
-    const currentChapterId = chapterInfo.chapter_id
-    const currentChapterTitle = chapterInfo.title
-
-    // 构建当前章节对象
-    const current = {
-      id: currentChapterId,
-      name: currentChapterTitle,
-      url: win.location.href,
-      images: chapterInfo.page_url || []
-    }
-    current.pageCount = current.images.length
-
-    // 提取章节列表
-    const chapterListData = comicInfo.chapterList?.[0]?.data || []
-
-    // 转换章节列表格式
-    const list = chapterListData.map((ch) => ({
-      id: ch.chapter_id,
-      name: ch.chapter_title,
-      url: `./${ch.chapter_id}`,
-      updateTime: formatTimestamp(ch.updatetime)
-    }))
-
-    // 按章节顺序排序（chapter_order 从小到大）
-    list.sort((a, b) => {
-      const orderA =
-        chapterListData.find((ch) => ch.chapter_id === a.id)?.chapter_order || 0
-      const orderB =
-        chapterListData.find((ch) => ch.chapter_id === b.id)?.chapter_order || 0
-      return orderA - orderB
-    })
-
-    // 找到当前章节在列表中的索引
-    const currentIndex = list.findIndex((ch) => ch.id === currentChapterId)
-
-    // 确定上一章和下一章
-    const previous = currentIndex > 0 ? list[currentIndex - 1] : null
-    const next = currentIndex < list.length - 1 ? list[currentIndex + 1] : null
-
-    // 构建完整的数据结构
-    const data = {
-      manga,
-      chapter: { current, previous, next, list }
-    }
-
-    console.log('[再漫画适配器] 数据提取成功:', {
-      manga: manga.title,
-      currentChapter: current.name,
-      totalChapters: list.length,
-      totalPages: current.images.length,
-      hasPrevious: !!previous,
-      hasNext: !!next
-    })
-
-    return data
-  } catch (error) {
-    console.error('[再漫画适配器] 提取数据失败:', error)
-    return null
-  }
-}
-
-/**
- * 从漫画柜网站提取数据
- * @returns {Object|null} 转换后的漫画数据，失败返回null
- */
-async function extractDataFromManhuagui() {
-  const evalKeyword = 'window["\\x65\\x76\\x61\\x6c"]'
-
-  try {
-    // 查找包含漫画信息的脚本
-    const scriptElements = Array.from(document.querySelectorAll('script'))
-    const infoScriptElement = scriptElements.find((script) =>
-      script.innerText.includes(evalKeyword)
-    )
-
-    if (!infoScriptElement) {
-      console.error('[漫画柜适配器] 没有找到漫画信息脚本')
-      return null
-    }
-
-    // 执行脚本获取原始数据
-    const scriptContent = infoScriptElement.innerText.replace(evalKeyword, '')
-    const rawData = new Function('return ' + scriptContent)()
-
-    // 提取JSON部分
-    const jsonStart = rawData.indexOf('{')
-    const jsonEnd = rawData.lastIndexOf('}') + 1
-    const jsonString = rawData.substring(jsonStart, jsonEnd)
-    const chapterInfo = JSON.parse(jsonString)
-
-    // 获取页面变量
-    const pageVariables = unsafeWindow.pVars
-
-    if (!chapterInfo || !pageVariables) {
-      console.error('[漫画柜适配器] 缺少必要的数据')
-      return null
-    }
-
-    // 构建当前章节对象
-    const { bid, bname, bpic, cid, cname, len, files, sl } = chapterInfo
-
-    // 构建漫画基本信息
-    const manga = {
-      id: bid,
-      title: bname || '未知标题',
-      author: '未知作者', // 漫画柜可能需要从其他位置获取作者信息
-      cover: bpic ? `https://cf.mhgui.com/cpic/h/${bpic}` : '',
-      description: '',
-      url: '.'
-    }
-
-    const current = {
-      id: cid + '',
-      name: cname,
-      url: window.location.href,
-      images: files.map((filename) => {
-        return `${pageVariables.manga.filePath}${filename}?e=${sl.e}&m=${sl.m}`
-      }),
-      pageCount: len
-    }
-
-    const { prevId, nextId } = chapterInfo
-
-    // 根据 prevId 和 nextId 确定上一章和下一章（直接组装，不依赖章节列表）
-    let previous = prevId
-      ? { id: prevId, name: '上一章', url: `./${prevId}.html` }
-      : null
-
-    let next = nextId
-      ? { id: nextId, name: '下一章', url: `./${nextId}.html` }
-      : null
-
-    const cacheKey = `manhuagui-${manga.id}`
-    const cache = $cache.get(cacheKey)
-
-    // 构建章节列表
-    const list = cache ? cache.chapters : []
-    let author = cache ? cache.author : ''
-
-    if (cache) {
-      console.log(`[漫画柜适配器] 发现并使用缓存<${cacheKey}>`, cache)
-    } else {
-      // 尝试从详情页DOM中提取作者和章节列表
-      try {
-        console.log('[漫画柜适配器] 尝试从详情页中提取章节列表')
-        const resp = await fetch(manga.url)
-        const htmlText = await resp.text()
-        const doc = new DOMParser().parseFromString(htmlText, 'text/html')
-        console.log('[漫画柜适配器] 详情页请求成功：', doc)
-        const authorLabelEl = Array.from(
-          doc.querySelectorAll('.book-detail .detail-list li span strong')
-        ).find((item) => item.innerText.includes('作者'))
-        if (authorLabelEl) {
-          author = Array.from(authorLabelEl.parentElement.childNodes)
-            .filter((el) => el !== authorLabelEl)
-            .map((item) => item.textContent)
-            .join('')
-          console.log('[漫画柜适配器] 从详情页获取到作者', author)
-        }
-        const chapterListEls = Array.from(
-          doc.querySelectorAll('.chapter .chapter-list')
-        ).reverse()
-        const chapters = chapterListEls
-          .map((clist) => Array.from(clist.querySelectorAll('ul')))
-          .flat()
-          .map((ul) => Array.from(ul.querySelectorAll('li a')).reverse())
-          .flat()
-          .map((item) => {
-            const url = item.href
-            const pageCount =
-              parseInt(item.querySelector('i')?.innerText) || null
-            const idMatched = url.match(/\/comic\/\d+\/(\d+).html/)
-            const id = idMatched ? idMatched[1] : url
-            return { id, name: item.title, url, pageCount }
-          })
-        list.push(...chapters)
-        console.log('[漫画柜适配器] 从详情页获取章节信息成功', list)
-      } catch (error) {
-        console.warn('[漫画柜适配器] 提取作者和章节列表失败:', error)
-      }
-    }
-
-    if (author) manga.author = author
-
-    if (list.length > 0) {
-      // 找到当前章节在列表中的索引
-      const currentIndex = list.findIndex((ch) => ch.id === current.id)
-      // 更新上一章和下一章
-      if (currentIndex > 0) previous = list[currentIndex - 1]
-      if (currentIndex < list.length - 1) next = list[currentIndex + 1]
-      // 如果缓存不存在，则保存当前相关数据
-      if (!cache) {
-        const cacheData = { author, chapters: list }
-        $cache.set(cacheKey, cacheData, 3600)
-        console.log(`[漫画柜适配器] 保存漫画详情页数据缓存`, cacheData)
-      }
-    } else {
-      list.push(current)
-    }
-
-    // 构建完整的数据结构
-    const mangaData = {
-      manga: manga,
-      chapter: { current, previous, next, list }
-    }
-
-    console.log('[漫画柜适配器] 数据提取成功:', {
-      manga: manga.title,
-      currentChapter: current.name,
-      totalChapters: list.length,
-      totalPages: current.images.length,
-      hasPrevious: !!previous,
-      hasNext: !!next
-    })
-
-    return mangaData
-  } catch (error) {
-    console.error('[漫画柜适配器] 提取数据失败:', error)
-    return null
-  }
-}
-// ============================================
-// 网站配置列表（模式化适配器）
-// ============================================
-
-const WEBSITE_LIST = [
-  {
-    name: '再漫画',
-    host: 'zaimanhua.com',
-    pathnameRegEx: /^\/view\//,
-    extract: extractDataFromZaimanhua
-  },
-  {
-    name: '漫画柜',
-    host: 'manhuagui.com',
-    pathnameRegEx: /^\/comic\/\d+\/\d+.html/,
-    extract: extractDataFromManhuagui
-  }
-  // 未来添加新网站示例：
-  // {
-  //   name: 'XXX漫画',
-  //   host: 'xxx.com',
-  //   pathnameRegEx: /^\/manga\/\d+/,  // 或者 null（不限制路径）
-  //   extract: extractDataFromXXXSite
-  // }
-]
-
-/**
- * 从当前网站加载漫画数据
- */
+// ==================== 数据加载器 ====================
 async function loadMangaData() {
   const host = location.host
   const pathname = location.pathname
 
   console.log('[Vue漫画阅读器] 检测网站:', host)
 
-  // 查找匹配的网站配置
-  const website = WEBSITE_LIST.find((site) => {
-    // 检查域名是否匹配
+  const website = WEBSITE_ADAPTERS.find((site) => {
     const hostMatch = host.includes(site.host)
     if (!hostMatch) return false
-
-    // 检查路径是否匹配（如果配置了路径正则）
-    if (site.pathnameRegEx) {
-      return site.pathnameRegEx.test(pathname)
-    }
-
-    // 如果没有配置路径正则，只要域名匹配即可
+    if (site.pathnameRegEx) return site.pathnameRegEx.test(pathname)
     return true
   })
 
@@ -1915,9 +1197,7 @@ async function loadMangaData() {
   console.log(`[Vue漫画阅读器] 检测到${website.name}，开始提取数据...`)
 
   try {
-    // 调用对应的提取函数
     const data = await website.extract()
-
     if (data) {
       setMangaData(data)
       console.log('[Vue漫画阅读器] 数据加载成功')
@@ -1929,34 +1209,33 @@ async function loadMangaData() {
   }
 }
 
-// ============================================
-// 主脚本执行体
-// ============================================
-
+// ==================== 主程序入口 ====================
 ;(function () {
   'use strict'
 
   console.log('[Vue漫画阅读器] 初始化...')
+
   // 清理过期缓存
   $cache.clearExpired()
+
   // Vue注入
   if (!unsafeWindow.Vue) unsafeWindow.Vue = Vue
 
   // 注入样式
-  injectStyles()
+  GM_addStyle(STYLES)
 
-  const appContainer = createAppContainer()
-  // 初始化Vue应用
-  const app = initVueApp()
-  const $vm = app.mount(appContainer)
+  // 创建容器并挂载Vue应用
+  const container = document.createElement('div')
+  container.id = 'vue-manga-reader'
+  document.body.appendChild(container)
 
+  const app = createVueApp()
+  const $vm = app.mount(container)
   window.$vm = $vm
 
   // 暴露全局API
   exposeGlobalAPI()
 
-  // 延迟加载数据（确保Vue应用已完全初始化）
-  setTimeout(() => {
-    loadMangaData()
-  }, 1000)
+  // 延迟加载数据
+  setTimeout(loadMangaData, 1000)
 })()
