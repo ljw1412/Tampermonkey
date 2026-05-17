@@ -1287,10 +1287,6 @@ function createVueApp() {
           </div>
 
           <div class="vmr-image-container">
-            <div class="vmr-manga-preload">
-              <img v-for="imgUrl of preloadImages" :src="imgUrl" alt="预加载" />
-            </div>
-
             <div v-if="currentImage" class="vmr-manga-page">
               <img :src="currentImage" :alt="'第' + (currentPageIndex + 1) + '页'" />
             </div>
@@ -1298,6 +1294,10 @@ function createVueApp() {
             <div v-else class="vmr-empty-state">
               <div class="vmr-empty-state-icon">📖</div>
               <div class="vmr-empty-state-text">暂无内容，请使用 $setMangaData 加载漫画数据</div>
+            </div>
+            
+            <div class="vmr-manga-preload">
+              <img v-for="imgUrl of preloadImages" :src="imgUrl" alt="预加载" />
             </div>
           </div>
         </div>
