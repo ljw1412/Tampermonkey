@@ -97,7 +97,7 @@ function formatTimestamp(timestamp) {
 // ==================== CSS样式 ====================
 const STYLES = `
 .vmr-overflow-hidden { overflow: hidden; }
-.rotate-90 { transform: rotate(90deg); }
+.child-icon-rotate-90 .vmr-icon, .rotate-90 { transform: rotate(90deg); }
 .vmr-icon {
   display: inline-block; width: 1em; height: 1em; color: inherit;
   font-style: normal; vertical-align: -2px; outline: none; stroke: currentColor;
@@ -107,6 +107,7 @@ const STYLES = `
   font-size: 12px; line-height: 1;
   font-family: -apple-system, PingFang SC, HarmonyOS_Regular, Roboto, Microsoft YaHei, Helvetica Neue, Arial, sans-serif !important;
 }
+
 #vue-manga-reader * {
   font-family: -apple-system, PingFang SC, HarmonyOS_Regular, Roboto, Microsoft YaHei, Helvetica Neue, Arial, sans-serif !important;
 }
@@ -205,19 +206,26 @@ const STYLES = `
 .vmr-sidebar.vmr-show { transform: translateX(0); opacity: 1; }
 
 .vmr-sidebar-header {
-  padding: 22px 18px;;
+  padding: 20px 0;
   background: linear-gradient(135deg, var(--vmr-gradient-start) 0%, var(--vmr-gradient-end) 100%);
   color: white;
 }
 .vmr-manga-title {
-  font-size: 18px; font-weight: bold; margin-bottom: 8px;
+  font-size: 18px; font-weight: bold; margin-bottom: 8px; padding: 0 18px;
   color: inherit; text-decoration: none;
 }
 a.vmr-manga-title:hover { text-decoration: underline; }
-.vmr-manga-author { margin-top: 6px; font-size: 14px; opacity: 0.9; }
+.vmr-manga-author { margin-top: 6px; font-size: 14px; opacity: 0.9; padding: 0 18px; }
+
+.vmr-manga-desc {
+  margin-top: 6px; padding: 0 18px;  color: var(--vmr-text-secondary);
+  font-size: 13px; line-height: 1.6; min-height: 1.6em; max-height: 6.4em;
+  overflow-y: auto; word-break: break-all; box-sizing: content-box; flex-shrink: 0;
+}
+.vmr-manga-desc::-webkit-scrollbar-track { background: transparent; }
 
 .vmr-chapter-info {
-  padding: 15px 20px; border-bottom: 1px solid var(--vmr-border-color);
+  padding: 16px 18px; border-bottom: 1px solid var(--vmr-border-color);
   background: var(--vmr-bg-primary);
 }
 .vmr-current-chapter { font-size: 14px; color: var(--vmr-text-primary); margin-bottom: 5px; }
@@ -236,7 +244,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 .vmr-chapter-list {
   display: grid; grid-template-columns: repeat(3, 1fr);
   column-gap: 6px; row-gap: 6px; padding: 10px;
-  color: var(--vmr-text-primary); overflow-y: auto;
+  color: var(--vmr-text-primary); overflow-y: auto; overflow-x: hidden;
 }
 .vmr-chapter-item {
   padding: 12px 15px; border-radius: 6px; cursor: pointer;
@@ -409,7 +417,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
   border-radius: 4px; overflow: hidden;
 }
 .vmr-manga-page img {
-  width: auto; height: 100%; display: block; object-fit: contain;
+  width: auto; max-width: 100%; height: 100%; display: block; object-fit: contain;
 }
 
 .vmr-empty-state {
@@ -444,6 +452,22 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 .vmr-confirm-box {
   padding: 24px; min-width: 320px; max-width: 400px;
 }
+.vmr-confirm-title {
+  font-size: 18px; font-weight: bold; margin-bottom: 12px; color: var(--vmr-text-primary);
+}
+.vmr-confirm-message {
+  font-size: 14px; color: var(--vmr-text-secondary);
+  margin-bottom: 24px; line-height: 1.6;
+}
+.vmr-confirm-buttons { display: flex; gap: 12px; justify-content: flex-end; }
+.vmr-confirm-buttons button {
+  padding: 8px 20px; border: none; border-radius: 4px;
+  cursor: pointer; font-size: 14px; transition: all 0.2s;
+}
+.vmr-btn-cancel { background: var(--vmr-cancel-btn-bg); color: var(--vmr-cancel-btn-text); }
+.vmr-btn-cancel:hover { background: var(--vmr-cancel-btn-hover); }
+.vmr-btn-confirm { background: var(--vmr-confirm-btn-bg); color: var(--vmr-confirm-btn-text); }
+.vmr-btn-confirm:hover { background: var(--vmr-confirm-btn-hover); }
 
 .vmr-settings-box {
   width: calc(100% - 24px); max-width: 640px; overflow: hidden;
@@ -734,6 +758,20 @@ const WEBSITE_ADAPTERS = [
 ]
 
 // ==================== Vue应用 ====================
+const ICON = {
+  close: `<path d="M9.857 9.858 24 24m0 0 14.142 14.142M24 24 38.142 9.858M24 24 9.857 38.142"></path>`,
+  fold: `<path d="M42 11H6M42 24H22M42 37H6M13.66 26.912l-4.82-3.118 4.82-3.118v6.236Z"></path>`,
+  unfold: `<path d="M6 11h36M22 24h20M6 37h36M8 20.882 12.819 24 8 27.118v-6.236Z"></path>`,
+  settings: `<path d="M18.797 6.732A1 1 0 0 1 19.76 6h8.48a1 1 0 0 1 .964.732l1.285 4.628a1 1 0 0 0 1.213.7l4.651-1.2a1 1 0 0 1 1.116.468l4.24 7.344a1 1 0 0 1-.153 1.2L38.193 23.3a1 1 0 0 0 0 1.402l3.364 3.427a1 1 0 0 1 .153 1.2l-4.24 7.344a1 1 0 0 1-1.116.468l-4.65-1.2a1 1 0 0 0-1.214.7l-1.285 4.628a1 1 0 0 1-.964.732h-8.48a1 1 0 0 1-.963-.732L17.51 36.64a1 1 0 0 0-1.213-.7l-4.65 1.2a1 1 0 0 1-1.116-.468l-4.24-7.344a1 1 0 0 1 .153-1.2L9.809 24.7a1 1 0 0 0 0-1.402l-3.364-3.427a1 1 0 0 1-.153-1.2l4.24-7.344a1 1 0 0 1 1.116-.468l4.65 1.2a1 1 0 0 0 1.213-.7l1.286-4.628Z"></path><path d="M30 24a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"></path>`,
+  left: `<path d="M32 8.4 16.444 23.956 32 39.513"></path>`,
+  right: `<path d="m16 39.513 15.556-15.557L16 8.4"></path>`
+}
+
+function getIcon(name, props = '') {
+  if (!ICON[name]) return ''
+  return `<svg ${props} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-${name}" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter">${ICON[name]}</svg>`
+}
+
 function createVueApp() {
   const { createApp, ref, computed, reactive, watch } = Vue
 
@@ -1074,7 +1112,7 @@ function createVueApp() {
 
       <div v-if="isVisible" class="manga-reader-container" :data-theme="theme">
         <div class="vmr-reader-close-btn" @click="closeReader" title="关闭">
-          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-close" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="M9.857 9.858 24 24m0 0 14.142 14.142M24 24 38.142 9.858M24 24 9.857 38.142"></path></svg>
+          ${getIcon('close')}
         </div>
 
         <div class="vmr-toast" :class="{ 'vmr-show': toast.isVisible }">{{ toast.message }}</div>
@@ -1094,7 +1132,7 @@ function createVueApp() {
           <div class="vmr-dialog-box vmr-settings-box">
             <div class="vmr-settings-header">
               <div class="vmr-settings-title">阅读器设置</div>
-              <button class="vmr-settings-close" @click="closeSettings" title="关闭">×</button>
+              <button class="vmr-settings-close" @click="closeSettings" title="关闭">${getIcon('close')}</button>
             </div>
             <div class="vmr-settings-content">
               <!-- 设置内容区域 -->
@@ -1107,6 +1145,7 @@ function createVueApp() {
             <a v-if="manga?.url" class="vmr-manga-title" :href="manga.url" target="_blank" rel="noopener noreferrer">{{ manga?.title || '未加载漫画' }}</a>
             <div v-else class="vmr-manga-title">{{ manga?.title || '未加载漫画' }}</div>
             <div class="vmr-manga-author">{{ manga?.author || '未知作者' }}</div>
+            <div v-if="manga?.description" class="vmr-manga-desc">{{ manga.description }}</div>
           </div>
 
           <div class="vmr-chapter-info">
@@ -1135,10 +1174,8 @@ function createVueApp() {
         <div class="vmr-toolbar" :class="{ 'vmr-show': isUIVisible, 'has-sidebar': isSidebarVisible }">
           <div class="vmr-toolbar-left">
             <div class="vmr-sidebar-toogle-btn" @click="toggleSidebar" :title="isSidebarVisible ? '隐藏侧边栏' : '显示侧边栏'">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-menu-toggle" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter">
-                <path v-if="isSidebarVisible" d="M42 11H6M42 24H22M42 37H6M13.66 26.912l-4.82-3.118 4.82-3.118v6.236Z"></path>
-                <path v-else d="M6 11h36M22 24h20M6 37h36M8 20.882 12.819 24 8 27.118v-6.236Z"></path>
-              </svg>
+              ${getIcon('fold', 'v-if="isSidebarVisible"')}
+              ${getIcon('unfold', 'v-else')}
             </div>
             <div v-if="!isSidebarVisible" class="vmr-breadcrumb">
               <a v-if="manga?.url" :href="manga.url" target="_blank" rel="noopener noreferrer">{{ manga?.title || '未加载漫画' }}</a>
@@ -1156,10 +1193,8 @@ function createVueApp() {
 
         <div class="vmr-navbar" :class="{ 'vmr-show': isUIVisible }">
           <div class="vmr-progress">
-            <div class="vmr-navbar-btn vmr-progress-perv" :class="{ disabled: currentPageIndex <= 0 && !hasPrevChapter }" @click="prevPage">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-left" :class="{ 'rotate-90': currentPageIndex <= 0 }" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter">
-                <path d="M32 8.4 16.444 23.956 32 39.513"></path>
-              </svg>
+            <div class="vmr-navbar-btn vmr-progress-perv" :class="{ disabled: currentPageIndex <= 0 && !hasPrevChapter, 'child-icon-rotate-90': currentPageIndex <= 0 }" @click="prevPage">
+              ${getIcon('left')}
               <div class="vmr-button-tooltip">{{ prevButtonTooltip }}</div>
             </div>
             <div class="vmr-progress-status">{{ currentPageIndex + 1 }} / {{ totalPages }}</div>
@@ -1168,13 +1203,11 @@ function createVueApp() {
               <div class="vmr-slider-tooltip">{{ sliderValue }}</div>
             </div>
             <div class="vmr-navbar-btn vmr-setting-btn" @click="toggleSettings">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-settings" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter"><path d="M18.797 6.732A1 1 0 0 1 19.76 6h8.48a1 1 0 0 1 .964.732l1.285 4.628a1 1 0 0 0 1.213.7l4.651-1.2a1 1 0 0 1 1.116.468l4.24 7.344a1 1 0 0 1-.153 1.2L38.193 23.3a1 1 0 0 0 0 1.402l3.364 3.427a1 1 0 0 1 .153 1.2l-4.24 7.344a1 1 0 0 1-1.116.468l-4.65-1.2a1 1 0 0 0-1.214.7l-1.285 4.628a1 1 0 0 1-.964.732h-8.48a1 1 0 0 1-.963-.732L17.51 36.64a1 1 0 0 0-1.213-.7l-4.65 1.2a1 1 0 0 1-1.116-.468l-4.24-7.344a1 1 0 0 1 .153-1.2L9.809 24.7a1 1 0 0 0 0-1.402l-3.364-3.427a1 1 0 0 1-.153-1.2l4.24-7.344a1 1 0 0 1 1.116-.468l4.65 1.2a1 1 0 0 0 1.213-.7l1.286-4.628Z"></path><path d="M30 24a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"></path></svg>
+              ${getIcon('settings')}
               <div class="vmr-button-tooltip">设置</div>
             </div>
-            <div class="vmr-navbar-btn vmr-progress-next" :class="{ disabled: currentPageIndex >= totalPages - 1 && !hasNextChapter }" @click="nextPage">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-right" :class="{ 'rotate-90': currentPageIndex >= totalPages - 1 }" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter">
-                <path d="m16 39.513 15.556-15.557L16 8.4"></path>
-              </svg>
+            <div class="vmr-navbar-btn vmr-progress-next" :class="{ disabled: currentPageIndex >= totalPages - 1 && !hasNextChapter, 'child-icon-rotate-90': currentPageIndex >= totalPages - 1 }" @click="nextPage">
+              ${getIcon('right')}
               <div class="vmr-button-tooltip">{{ nextButtonTooltip }}</div>
             </div>
           </div>
