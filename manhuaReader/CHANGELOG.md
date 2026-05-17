@@ -5,6 +5,55 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.0] - 2026-05-17
+
+### ✨ 重大重构
+- **代码结构优化**：全面重构代码架构，提升可维护性和可读性
+- **常量集中管理**：提取所有魔法数字和配置到 CONFIG 对象
+- **模块化设计**：清晰的模块划分（工具类、数据提取器、Vue应用）
+- **代码精简**：减少约 24% 的代码量（从 ~1500行 到 1146行）
+
+### 🔧 技术改进
+- **响应式状态管理优化**：使用独立的 ref 和 reactive 变量，确保模板响应性
+  - manga: `ref(null)` - 漫画信息
+  - chapter: `reactive({ current, previous, next, list })` - 章节信息
+  - currentPageIndex: `ref(0)` - 当前页索引
+  - isVisible, isUIVisible, isSidebarVisible: `ref(false)` - UI状态
+  - theme: `ref('light')` - 主题设置
+- **CSS样式提取**：将所有CSS样式提取为 STYLES 常量，便于维护
+- **缓存管理器简化**：优化 CacheManager 类，移除冗余代码和注释
+- **数据提取器重构**：
+  - 简化 `extractFromZaimanhua()` 函数逻辑
+  - 优化 `extractFromManhuagui()` 缓存策略
+  - 统一错误处理和日志输出
+- **网站适配器配置化**：使用 WEBSITE_ADAPTERS 数组管理多网站支持，便于扩展
+
+### 🎨 代码质量提升
+- 移除大量冗余注释和未使用的代码
+- 使用现代 JavaScript 语法（可选链 `?.`、空值合并 `??`）
+- 统一命名规范和代码风格
+- 优化方法命名，提高可读性
+- 精简 Vue 模板代码，移除冗余条件判断
+
+### 🐛 Bug 修复
+- ✅ 修复 Vue 模板变量响应性问题（使用独立 ref/reactive 而非单一 state 对象）
+- ✅ 优化章节切换时的状态同步
+- ✅ 修复滑块位置更新延迟问题
+- ✅ 确保计算属性正确依赖响应式变量
+
+### 📚 文档完善
+- 更新 README.md，添加详细的功能说明和使用指南
+- 完善 QUICKSTART.md 快速开始指南
+- 优化 ADAPTER_GUIDE.md 适配器开发文档
+- 新增项目总览文档（根目录 README.md）
+
+### 🔄 向后兼容性
+- ⚠️ 全局 API 保持不变：`$setMangaData(data)`
+- ⚠️ 数据结构保持不变：`{ manga, chapter }`
+- ⚠️ 所有现有功能完全保留
+
+---
+
 ## [Unreleased]
 
 ### ✨ 新增功能
