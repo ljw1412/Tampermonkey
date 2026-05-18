@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         漫画阅读器
 // @namespace    http://tampermonkey.net/
-// @version      2.1.0
+// @version      2.1.1
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/*
@@ -930,6 +930,7 @@ function createVueApp() {
       }
 
       const nextPage = () => {
+        if (isUIVisible.value) isUIVisible.value = false
         if (currentPageIndex.value < totalPages.value - 1) {
           currentPageIndex.value++
         } else if (hasNextChapter.value) {
@@ -946,6 +947,7 @@ function createVueApp() {
       }
 
       const prevPage = () => {
+        if (isUIVisible.value) isUIVisible.value = false
         if (currentPageIndex.value > 0) {
           currentPageIndex.value--
         } else if (hasPrevChapter.value) {
@@ -987,7 +989,7 @@ function createVueApp() {
       const toggleSidebar = () => {
         isSidebarVisible.value = !isSidebarVisible.value
       }
-      const toggleToolbar = () => {
+      const toggleUI = () => {
         isUIVisible.value = !isUIVisible.value
       }
 
@@ -1020,13 +1022,16 @@ function createVueApp() {
       }
 
       const handleLeftClick = () => {
-        if (!isClickZoneLocked.value) prevPage()
+        if (isClickZoneLocked.value) return
+        prevPage()
       }
       const handleCenterClick = () => {
-        if (!isClickZoneLocked.value) toggleToolbar()
+        if (isClickZoneLocked.value) return
+        toggleUI()
       }
       const handleRightClick = () => {
-        if (!isClickZoneLocked.value) nextPage()
+        if (isClickZoneLocked.value) return
+        nextPage()
       }
 
       const handleSliderInput = (event) => {
@@ -1068,21 +1073,31 @@ function createVueApp() {
         event.preventDefault()
         event.stopPropagation()
         event.stopImmediatePropagation()
+        console.log(event)
 
         switch (event.key) {
+          case 'ArrowDown':
           case 'ArrowRight':
+            if (confirmDialog.isVisible) handleCancel()
             nextPage()
             break
+          case 'ArrowUp':
           case 'ArrowLeft':
+            if (confirmDialog.isVisible) handleCancel()
             prevPage()
             break
           case 'Escape':
             if (confirmDialog.isVisible) handleCancel()
+            else if (isSettingsVisible.value) isSettingsVisible.value = false
             else if (isSidebarVisible.value) isSidebarVisible.value = false
             else isUIVisible.value = false
             break
+          case ' ':
+            if (!confirmDialog.isVisible) toggleUI()
+            break
           case 'Enter':
             if (confirmDialog.isVisible) handleConfirm()
+            else toggleUI()
             break
         }
       }
@@ -1156,7 +1171,7 @@ function createVueApp() {
         prevPage,
         loadChapter,
         toggleSidebar,
-        toggleToolbar,
+        toggleToolbar: toggleUI,
         toggleTheme,
         handleThemeChange,
         handlePreloadCountChange,
