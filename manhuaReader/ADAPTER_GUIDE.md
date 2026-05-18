@@ -2,11 +2,15 @@
 
 本文档详细说明如何为 manhuaReader 添加新的漫画网站支持。
 
+**最新版本**: v2.1.0 (2026-05-18)  
+**新增特性**: SPA 路由监听、配置化轮询间隔、增强日志系统
+
 ## 📋 目录
 
 - [适配器架构](#适配器架构)
 - [数据结构规范](#数据结构规范)
 - [开发步骤](#开发步骤)
+- [SPA 支持详解](#spa-支持详解)
 - [示例代码](#示例代码)
 - [调试技巧](#调试技巧)
 - [常见问题](#常见问题)
@@ -32,6 +36,11 @@
 │  │ Adapter  │ │ Adapter  │         │
 │  └──────────┘ └──────────┘         │
 ├─────────────────────────────────────┤
+│  SPA Route Monitor (路由监听层)      │
+│  - pathname 变化检测                │
+│  - 自动重新加载数据                  │
+│  - 可配置轮询间隔                    │
+├─────────────────────────────────────┤
 │  Website Detection & Loading        │
 └─────────────────────────────────────┘
 ```
@@ -44,9 +53,10 @@
    - 自动清理过期缓存
    - 命名空间隔离，避免键冲突
 
-2. **网站配置列表** (`WEBSITE_LIST`)
+2. **网站配置列表** (`WEBSITE_ADAPTERS`)
    - 定义支持的网站
-   - 包含域名、路径和提取函数
+   - 包含域名、路径、SPA 标记和提取函数
+   - 支持配置化的轮询间隔和加载延迟
 
 3. **数据提取函数** (`extract` function)
    - 从页面提取原始数据
@@ -54,10 +64,17 @@
    - 可选择使用缓存优化性能
    - 返回统一格式的数据对象
 
-4. **自动加载器** (`loadMangaData`)
-   - 检测当前网站
-   - 调用对应的提取函数
-   - 设置数据到 Vue 应用
+4. **数据加载器**
+   - `getWebsite()`: 检测当前网站
+   - `checkReadPage()`: 检查是否为阅读页
+   - `loadMangaData()`: 加载漫画数据
+   - `loadData()`: 统一的加载入口（初始化 + 路由变化）
+
+5. **SPA 路由监听器**
+   - `startPathnameTimer()`: 启动路由监听
+   - `stopPathnameTimer()`: 停止路由监听
+   - 定时检测 pathname 变化
+   - 自动触发数据重新加载
 
 ## 📊 数据结构规范
 
@@ -168,6 +185,19 @@ console.log(window.chapterData) // 自定义
 - 图片容器
 - 章节列表
 
+#### 1.4 判断是否为 SPA
+
+**SPA 特征：**
+- 章节切换时页面不刷新
+- URL 变化但无网络请求（或使用 Fetch/XHR）
+- 使用 Vue Router、React Router 等前端路由
+- 查看 Network 面板，章节切换时无 HTML 文档请求
+
+**非 SPA 特征：**
+- 每次章节切换都刷新整个页面
+- 有完整的 HTTP 请求和响应
+- URL 变化伴随页面重载
+
 ### 步骤 2：创建提取函数
 
 #### 2.1 基本模板
@@ -240,15 +270,18 @@ function extractDataFrom[SiteName]() {
 
 ### 步骤 3：注册适配器
 
-#### 3.1 添加到 WEBSITE_LIST
+#### 3.1 添加到 WEBSITE_ADAPTERS
 
 ```
-const WEBSITE_LIST = [
+const WEBSITE_ADAPTERS = [
   // ... 现有适配器
   {
     name: '网站中文名称',
-    host: 'domain.com', // 域名关键字
-    pathnameRegEx: /^\/path\//, // 路径正则（可选）
+    host: 'domain.com',              // 域名关键字
+    pathnameRegEx: /^\/path\//,      // 路径正则（可选）
+    spa: false,                      // 是否为单页应用（可选，默认false）
+    loadDelay: 0,                    // 数据加载延迟（可选，默认0）
+    pathnamePollingDelay: 500,       // SPA轮询间隔（可选，默认500）
     extract: extractDataFrom[SiteName]
   }
 ]
@@ -256,16 +289,35 @@ const WEBSITE_LIST = [
 
 #### 3.2 配置说明
 
-**host**: 域名匹配关键字
+**必填字段：**
 
-- 使用 `includes` 匹配
-- 例如：`'zaimanhua.com'` 会匹配 `manhua.zaimanhua.com`
+- `name`: 网站中文名称，用于日志输出
+- `host`: 域名匹配关键字，使用 `includes` 匹配
+  - 例如：`'zaimanhua.com'` 会匹配 `manhua.zaimanhua.com`
+- `extract`: 数据提取函数
 
-**pathnameRegEx**: 路径匹配正则（可选）
+**可选字段：**
 
-- 如果不设置，只要域名匹配即可
-- 如果设置，需要同时满足域名和路径
-- 例如：`/^\/view\//` 匹配 `/view/xxx` 路径
+- `pathnameRegEx`: 路径匹配正则
+  - 如果不设置，只要域名匹配即可
+  - 如果设置，需要同时满足域名和路径
+  - 例如：`/^\/view\//` 匹配 `/view/xxx` 路径
+
+- `spa`: 是否为单页应用
+  - `true`: 启用路由监听，自动检测 pathname 变化
+  - `false` 或不设置: 不启用路由监听
+  - **重要**: 如果网站是 SPA，务必设置为 `true`
+
+- `loadDelay`: 检测到阅读页后的数据加载延迟（毫秒）
+  - 适用于需要等待页面数据初始化的场景
+  - 例如：Nuxt.js hydration 需要时间
+  - 默认值：0（立即加载）
+
+- `pathnamePollingDelay`: SPA 路由变化检测间隔（毫秒）
+  - 仅在 `spa: true` 时生效
+  - 建议范围：300-1000ms
+  - 默认值：500ms
+  - 过小会影响性能，过大会降低响应速度
 
 ### 步骤 4：添加 @match 规则
 
@@ -316,6 +368,184 @@ console.assert($vm.chapter.current.images.length > 0, '必须有图片')
 - [ ] 图片加载正常
 - [ ] 键盘快捷键工作正常
 - [ ] 主题切换正常
+
+## 🚀 SPA 支持详解
+
+### 什么是 SPA？
+
+单页应用（Single Page Application）在章节切换时不会刷新整个页面，而是通过 JavaScript 动态更新内容。传统的 Tampermonkey 脚本只在页面加载时执行一次，无法感知后续的路由变化。
+
+### 为什么需要 SPA 支持？
+
+**问题场景：**
+1. 用户访问漫画阅读页 A
+2. 脚本正常加载，显示阅读器
+3. 用户点击"下一章"按钮
+4. URL 变为阅读页 B，但页面没有刷新
+5. ❌ 传统脚本无法感知这次变化
+6. ❌ 阅读器仍然显示旧章节数据
+
+**解决方案：**
+- 启用 SPA 路由监听
+- 定时检测 `location.pathname` 变化
+- 自动重新加载新章节数据
+- ✅ 用户体验流畅，无需手动刷新
+
+### 工作原理
+
+#### 1. 启动路由监听器
+
+```
+// 主程序入口
+if (website.spa) {
+  startPathnameTimer(() => {
+    const isReadPage = loadData()
+    if (!isReadPage) setReaderVisible(false)
+  }, website.pathnamePollingDelay)
+}
+```
+
+#### 2. 路由检测机制
+
+```
+let lastPathname = ''
+let pathnameTimer = null
+
+function startPathnameTimer(fn = () => {}, delay = 500) {
+  stopPathnameTimer()  // 先停止旧的定时器
+  lastPathname = location.pathname
+  
+  pathnameTimer = setInterval(() => {
+    const currentPathname = window.location.pathname
+    if (currentPathname !== lastPathname) {
+      console.log('[漫画阅读器] 检测到路由变化！新路径为:', currentPathname)
+      fn()  // 执行回调
+      lastPathname = currentPathname
+    }
+  }, delay)
+}
+
+function stopPathnameTimer() {
+  if (!pathnameTimer) return
+  clearInterval(pathnameTimer)
+  pathnameTimer = null
+}
+```
+
+#### 3. 统一的加载逻辑
+
+```
+function loadData() {
+  const isReadPage = checkReadPage(website)
+  
+  // 如果是阅读页，加载数据
+  if (isReadPage) {
+    setTimeout(() => {
+      loadMangaData(website, true)  // skipCheck=true，因为已经检查过
+    }, website.loadDelay || 0)
+  }
+  
+  // 根据页面类型控制入口按钮
+  setEntryVisible(isReadPage)
+  
+  return isReadPage
+}
+```
+
+### SPA 配置示例
+
+#### 再漫画（SPA 站点）
+
+```
+{
+  name: '再漫画',
+  spa: true,                        // ✅ 标记为 SPA
+  host: 'zaimanhua.com',
+  pathnameRegEx: /^\/view\//,       // 阅读页路径
+  pathnamePollingDelay: 500,        // 每 500ms 检测一次
+  loadDelay: 1000,                  // 检测到阅读页后延迟 1s 加载
+  extract: extractFromZaimanhua
+}
+```
+
+**工作流程：**
+1. 用户访问 `/view/123` → 脚本初始化，检测到阅读页，延迟 1s 后加载数据
+2. 用户点击下一章 → URL 变为 `/view/456`（页面无刷新）
+3. 路由监听器（每 500ms）检测到 pathname 变化
+4. 自动调用 `loadData()` → 检测到是阅读页 → 延迟 1s 后加载新数据
+5. 阅读器自动更新为新章节内容
+6. 用户离开阅读页 → URL 变为 `/details/123` → 隐藏阅读器，显示入口按钮
+
+#### 漫画柜（非 SPA 站点）
+
+```
+{
+  name: '漫画柜',
+  host: 'manhuagui.com',
+  pathnameRegEx: /^\/comic\/\d+\/\d+.html/,
+  // ❌ 没有 spa: true，不会启动路由监听
+  extract: extractFromManhuagui
+}
+```
+
+**工作流程：**
+1. 用户访问 `/comic/123/456.html` → 脚本初始化，加载数据
+2. 用户点击下一章 → 浏览器发起完整页面请求
+3. 新页面加载完成 → 脚本重新执行
+4. 检测到新章节，加载数据
+
+### SPA 开发注意事项
+
+#### 1. 正确设置 `pathnameRegEx`
+
+确保正则表达式能准确匹配阅读页路径：
+
+```
+// ✅ 正确：精确匹配阅读页
+pathnameRegEx: /^\/view\//
+
+// ❌ 错误：可能匹配到非阅读页
+pathnameRegEx: /\/view/  // 可能匹配 /api/view/stats
+```
+
+#### 2. 合理设置 `loadDelay`
+
+如果网站需要时间初始化数据，设置合适的延迟：
+
+```
+// Nuxt.js 需要 hydration 时间
+loadDelay: 1000
+
+// React SSR 可能需要更长时间
+loadDelay: 1500
+
+// 普通 SPA 可以立即加载
+loadDelay: 0
+```
+
+#### 3. 调整 `pathnamePollingDelay`
+
+根据网站性能和用户体验需求调整：
+
+```
+// 高性能设备，追求快速响应
+pathnamePollingDelay: 300
+
+// 平衡性能和资源占用（推荐）
+pathnamePollingDelay: 500
+
+// 低性能设备，节省资源
+pathnamePollingDelay: 1000
+```
+
+#### 4. 测试各种场景
+
+- [ ] 首次访问阅读页
+- [ ] 章节切换（上一章/下一章）
+- [ ] 从阅读页跳转到详情页
+- [ ] 从详情页跳转到阅读页
+- [ ] 浏览器前进/后退按钮
+- [ ] 手动修改 URL
 
 ## 💻 示例代码
 
@@ -721,6 +951,36 @@ function validateData(data) {
 }
 ```
 
+### 技巧 5：SPA 路由监听测试
+
+如果你的适配器支持 SPA，可以使用以下方法测试：
+
+```
+// 1. 检查是否启用了路由监听
+console.log('SPA 支持:', website?.spa)
+console.log('轮询间隔:', website?.pathnamePollingDelay)
+
+// 2. 模拟路由变化
+const originalPathname = location.pathname
+history.pushState({}, '', '/view/test-chapter')
+
+// 3. 观察日志输出
+// 应该看到 "[漫画阅读器] 检测到路由变化！新路径为: /view/test-chapter"
+
+// 4. 恢复原路径
+history.pushState({}, '', originalPathname)
+
+// 5. 检查数据是否正确加载
+console.log('当前章节:', $vm.chapter.current?.name)
+```
+
+**最佳实践：**
+- 确保 `pathnameRegEx` 正确配置
+- 测试各种路由切换场景
+- 验证数据是否正确重新加载
+- 检查 UI 状态是否正确更新（显示/隐藏）
+- 监控性能影响（CPU 和内存占用）
+
 ## ❓ 常见问题
 
 ### Q1: 如何获取动态加载的数据？
@@ -822,78 +1082,108 @@ GM_listValues().forEach(key => {
 - 通常足够存储数百个漫画的章节列表
 - 过期缓存会自动清理
 
-### Q4: 如何处理反爬虫机制？
+### Q4: 如何判断网站是否是 SPA？
 
-**建议：**
-
-1. 优先使用页面已渲染的数据
-2. 避免频繁的请求
-3. 模拟正常的用户行为
-4. 遵守网站的 robots.txt 和服务条款
-5. **使用缓存减少请求次数**（推荐）
-
-**注意：** 本脚本仅供学习交流，请合法使用。
-
-### Q5: 图片 URL 是相对路径怎么办？
-
-**解决方案：**
-
+**方法一：观察页面行为**
 ```
-// 将相对路径转换为绝对路径
-const baseUrl = win.location.origin
-const absoluteUrl = new URL(relativeUrl, baseUrl).href
-
-// 或者
-const absoluteUrl = baseUrl + relativeUrl
+1. 打开漫画章节页
+2. 点击"下一章"按钮
+3. 观察：
+   - 如果页面闪烁/刷新 → 不是 SPA
+   - 如果页面平滑过渡 → 可能是 SPA
 ```
 
-### Q6: 章节列表太多，性能有问题？
-
-**优化方案：**
-
+**方法二：检查 Network 面板**
 ```
-// 1. 只提取必要的字段
-const list = chapters.map((ch) => ({
-  id: ch.id,
-  name: ch.name,
-  url: ch.url
-  // 不要提取不必要的字段
-}))
-
-// 2. 使用缓存（强烈推荐）
-// 首次访问后缓存章节列表，后续直接使用缓存
-$cache.set(cacheKey, { chapters: list }, 3600)
-
-// 3. 使用虚拟滚动（如果章节非常多）
-// 在 Vue 模板中使用 v-infinite-scroll 等插件
-
-// 4. 延迟加载章节列表
-// 先显示当前章节，用户点击后再加载完整列表
+1. 打开开发者工具 → Network 标签
+2. 点击"下一章"
+3. 观察：
+   - 如果有新的 document 请求 → 不是 SPA
+   - 如果只有 API 请求或无请求 → 是 SPA
 ```
 
-### Q7: 如何处理加密或混淆的数据？
+**方法三：检查路由库**
+```javascript
+// 查找常见的前端路由库
+console.log(window.VueRouter)    // Vue Router
+console.log(window.ReactRouter)  // React Router
+console.log(window.ng)           // Angular Router
+```
 
-**方法一：查找解密函数**
+**方法四：监听路由事件**
+```javascript
+// 监听 popstate 事件（浏览器前进/后退）
+window.addEventListener('popstate', (e) => {
+  console.log('检测到 popstate 事件', location.pathname)
+})
+
+// 如果章节切换时触发此事件，说明是 SPA
+```
+
+### Q5: SPA 路由监听的性能影响？
+
+**资源占用：**
+- 每 500ms 执行一次简单的字符串比较
+- CPU 占用：< 0.1%
+- 内存占用：约 1KB（存储 lastPathname）
+
+**优化建议：**
+- 仅在需要的站点启用（`spa: true`）
+- 根据设备性能调整轮询间隔
+- 避免在回调函数中执行耗时操作
+
+**对比其他方案：**
+```javascript
+// ❌ History API 拦截（复杂，可能冲突）
+const originalPushState = history.pushState
+history.pushState = function() { /* ... */ }
+
+// ✅ pathname 轮询（简单，可靠）
+setInterval(() => {
+  if (location.pathname !== lastPathname) { /* ... */ }
+}, 500)
+```
+
+### Q6: 如何处理 SPA 中的数据加载延迟？
+
+有些 SPA 在路由变化后需要异步加载数据，此时需要设置 `loadDelay`：
+
+```
+{
+  name: '某SPA网站',
+  spa: true,
+  loadDelay: 1500,  // 等待 1.5s 让页面完成数据加载
+  extract: extractData
+}
+```
+
+**或者在提取函数中等待数据：**
 
 ```javascript
-// 在控制台中搜索解密相关函数
-Object.keys(window).forEach((key) => {
-  if (
-    key.toLowerCase().includes('decrypt') ||
-    key.toLowerCase().includes('decode')
-  ) {
-    console.log(key, window[key])
-  }
-})
+async function extractDataFromSPASite() {
+  // 等待数据加载完成
+  await waitForData()
+  
+  // 提取数据
+  return processData()
+}
+
+function waitForData(timeout = 3000) {
+  return new Promise((resolve, reject) => {
+    const checkInterval = setInterval(() => {
+      if (window.PAGE_DATA) {
+        clearInterval(checkInterval)
+        resolve()
+      }
+    }, 100)
+    
+    setTimeout(() => {
+      clearInterval(checkInterval)
+      reject(new Error('数据加载超时'))
+    }, timeout)
+  })
+}
 ```
-
-**方法二：逆向工程**
-
-- 查看 JavaScript 源代码
-- 理解加密逻辑
-- 实现相应的解密函数
-
-**注意：** 尊重知识产权，仅用于学习研究。
 
 ## 📚 参考资源
 

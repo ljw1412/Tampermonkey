@@ -2,8 +2,8 @@
 
 基于 Vue 3 的 Tampermonkey 漫画阅读器，提供统一的阅读界面和数据接口。
 
-**最新版本**: v2.1.0 (2026-05-17)  
-**代码重构**: 已完成，代码量减少 24%，可维护性大幅提升
+**最新版本**: v2.1.0 (2026-05-18)  
+**核心特性**: SPA 路由监听、智能站点适配、完善的日志系统
 
 ## 📋 目录
 
@@ -29,6 +29,7 @@
 - **智能缓存系统**：自动缓存章节列表数据，减少网络请求，提升加载速度
 - **智能滑块导航**：支持拖动滑块快速定位页码，实时显示当前页提示
 - **动态 Tooltip 系统**：所有交互元素都有智能提示，悬停即显示
+- **SPA 路由监听**：完美支持单页应用，自动检测路由变化并加载数据
 
 ### 🎨 用户体验
 - **主题切换**：支持亮色/暗色主题，用户偏好持久化保存
@@ -45,13 +46,14 @@
 - **键盘快捷键**：左右箭头翻页、ESC 关闭 UI
 - **自动隐藏**：首次进入显示 1 秒后自动隐藏 UI
 - **一键切换**：工具栏按钮快速控制侧边栏和主题
+- **SPA 无缝切换**：单页应用中章节切换无需刷新页面，自动加载新数据
 
-### 🔧 v2.0.0 新特性
-- ✨ **代码重构**：全面优化代码结构，提升可维护性
-- 📦 **常量管理**：所有配置集中到 CONFIG 对象
-- 🎯 **响应式优化**：使用独立 ref/reactive 变量，确保模板响应性
-- 📝 **代码精简**：减少约 24% 的代码量
-- 🐛 **Bug修复**：修复模板变量响应性问题
+### 🔧 v2.1.0 新特性
+- ✨ **SPA 路由监听**：支持非 Hash 模式的单页应用，自动检测 pathname 变化
+- 📝 **增强日志系统**：完善的日志输出，便于调试和问题排查
+- 🎯 **配置化轮询间隔**：每个 SPA 站点可自定义路由检测频率
+- 🔄 **智能加载策略**：统一的 `loadData()` 函数，初始化和路由变化共用逻辑
+- 🐛 **Bug修复**：优化全局 API 访问方式，确保响应式正常工作
 
 ## 🚀 快速开始
 
@@ -227,20 +229,35 @@ event.stopImmediatePropagation()
 
 #### 适配器结构
 
-```
-const WEBSITE_LIST = [
+```javascript
+const WEBSITE_ADAPTERS = [
   {
     name: '网站名称',
-    host: 'domain.com',
-    pathnameRegEx: /^\/path\//,  // 可选，路径匹配正则
-    extract: extractDataFunction   // 数据提取函数
+    host: 'domain.com',              // 域名关键字（必填）
+    pathnameRegEx: /^\/path\//,      // 阅读页路径匹配正则（可选）
+    spa: true,                       // 是否为单页应用（可选，默认false）
+    loadDelay: 1000,                 // 数据加载延迟毫秒数（可选，默认0）
+    pathnamePollingDelay: 500,       // SPA路由轮询间隔毫秒数（可选，默认500）
+    extract: extractDataFunction     // 数据提取函数（必填）
   }
 ]
 ```
 
+#### 配置字段说明
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `name` | string | ✅ | - | 网站中文名称，用于日志输出 |
+| `host` | string | ✅ | - | 域名关键字，使用 `includes` 匹配 |
+| `pathnameRegEx` | RegExp | ❌ | - | 阅读页路径正则，不设置则域名匹配即可 |
+| `spa` | boolean | ❌ | false | 是否为单页应用，启用路由监听 |
+| `loadDelay` | number | ❌ | 0 | 检测到阅读页后的数据加载延迟（毫秒） |
+| `pathnamePollingDelay` | number | ❌ | 500 | SPA 路由变化检测间隔（毫秒） |
+| `extract` | function | ✅ | - | 数据提取函数，返回标准数据结构或 null |
+
 #### 数据提取函数
 
-```
+``javascript
 function extractDataFromSite() {
   try {
     // 1. 从页面提取原始数据
@@ -257,6 +274,85 @@ function extractDataFromSite() {
     console.error('数据提取失败:', error)
     return null
   }
+}
+```
+
+### SPA 支持详解
+
+#### 什么是 SPA？
+
+单页应用（Single Page Application）在章节切换时不会刷新整个页面，而是通过 JavaScript 动态更新内容。传统的 Tampermonkey 脚本只在页面加载时执行一次，无法感知后续的路由变化。
+
+#### 工作原理
+
+``javascript
+// 1. 启动路由监听器（仅在标记为 spa: true 的站点）
+if (website.spa) {
+  startPathnameTimer(() => {
+    const isReadPage = loadData()
+    if (!isReadPage) setReaderVisible(false)
+  }, website.pathnamePollingDelay)
+}
+
+// 2. 定时检测 pathname 变化
+function startPathnameTimer(fn, delay) {
+  pathnameTimer = setInterval(() => {
+    const currentPathname = window.location.pathname
+    if (currentPathname !== lastPathname) {
+      // 检测到路由变化，执行回调
+      fn()
+      lastPathname = currentPathname
+    }
+  }, delay)
+}
+
+// 3. 统一的加载逻辑
+function loadData() {
+  const isReadPage = checkReadPage(website)
+  if (isReadPage) {
+    setTimeout(() => {
+      loadMangaData(website, true)
+    }, website.loadDelay || 0)
+  }
+  setEntryVisible(isReadPage)
+  return isReadPage
+}
+```
+
+#### SPA 场景示例
+
+**再漫画 (zaimanhua.com)** 是一个典型的 SPA 站点：
+
+``javascript
+{
+  name: '再漫画',
+  spa: true,                        // 标记为 SPA
+  host: 'zaimanhua.com',
+  pathnameRegEx: /^\/view\//,       // 阅读页路径
+  pathnamePollingDelay: 500,        // 每 500ms 检测一次路由
+  loadDelay: 1000,                  // 检测到阅读页后延迟 1s 加载数据
+  extract: extractFromZaimanhua
+}
+```
+
+**工作流程：**
+1. 用户访问 `/view/123` → 脚本初始化，检测到阅读页，加载数据
+2. 用户点击下一章 → URL 变为 `/view/456`（页面无刷新）
+3. 路由监听器检测到 pathname 变化
+4. 自动调用 `loadData()` 重新提取数据
+5. 阅读器自动更新为新章节内容
+
+#### 非 SPA 站点
+
+对于传统多页应用，不需要启用路由监听：
+
+``javascript
+{
+  name: '漫画柜',
+  host: 'manhuagui.com',
+  pathnameRegEx: /^\/comic\/\d+\/\d+.html/,
+  // 没有 spa: true，不会启动路由监听
+  extract: extractFromManhuagui
 }
 ```
 
@@ -315,12 +411,15 @@ function extractDataFromNewSite() {
 #### 步骤 2：注册适配器
 
 ```
-const WEBSITE_LIST = [
+const WEBSITE_ADAPTERS = [
   // ... 现有适配器
   {
     name: '新网站名称',
     host: 'newsite.com',
     pathnameRegEx: /^\/manga\//,  // 可选
+    spa: false,                    // 是否为 SPA
+    loadDelay: 0,                  // 加载延迟
+    pathnamePollingDelay: 500,     // SPA 轮询间隔（仅 spa=true 时生效）
     extract: extractDataFromNewSite
   }
 ]
@@ -342,12 +441,18 @@ const WEBSITE_LIST = [
 #### 再漫画 (zaimanhua.com)
 - **域名**：manhua.zaimanhua.com
 - **路径**：/view/*
+- **SPA**：✅ 是
 - **数据来源**：`window.__NUXT__.data`
-- **特点**：使用 Nuxt.js SSR，数据在服务端渲染
+- **特点**：
+  - 使用 Nuxt.js SSR，数据在服务端渲染
+  - 启用路由监听，每 500ms 检测一次 pathname 变化
+  - 检测到阅读页后延迟 1s 加载数据（等待 Nuxt  hydration）
+  - 章节切换无需刷新页面，自动加载新数据
 
 #### 漫画柜 (manhuagui.com)
 - **域名**：www.manhuagui.com
 - **路径**：/comic/{漫画ID}/{章节ID}.html
+- **SPA**：❌ 否
 - **数据来源**：页面脚本中的 `info` 对象和 `pVars` 变量
 - **特点**：
   - 从加密脚本中提取章节信息（使用 eval 解密）
@@ -395,6 +500,7 @@ manhuaReader/
 ├── manhuaReader.user.js      # 主脚本文件
 ├── README.md                  # 本文档
 ├── QUICKSTART.md              # 快速开始指南
+├── ADAPTER_GUIDE.md           # 适配器开发指南
 └── CHANGELOG.md               # 更新日志
 ```
 
@@ -402,23 +508,42 @@ manhuaReader/
 
 #### 主要模块
 
-1. **网站适配器模块**
-   - `extractDataFromZaimanhua()`：再漫画数据提取
-   - `WEBSITE_LIST`：网站配置列表
-   - `loadMangaData()`：自动检测并加载数据
+1. **常量配置模块** (`CONFIG`)
+   - 集中管理所有配置项
+   - 包括缓存前缀、主题键、默认值等
 
-2. **UI 模块**
+2. **工具类模块**
+   - `CacheManager`：缓存管理器，支持 TTL 和自动清理
+   - `formatTimestamp`：时间戳格式化工具
+
+3. **网站适配器模块**
+   - `extractFromZaimanhua()`：再漫画数据提取
+   - `extractFromManhuagui()`：漫画柜数据提取
+   - `WEBSITE_ADAPTERS`：网站配置列表
+   - `getWebsite()`：检测当前网站
+   - `checkReadPage()`：检查是否为阅读页
+   - `loadMangaData()`：加载漫画数据
+
+4. **SPA 路由监听模块**
+   - `startPathnameTimer()`：启动路由监听
+   - `stopPathnameTimer()`：停止路由监听
+   - 定时检测 pathname 变化
+   - 自动触发数据重新加载
+
+5. **UI 模块**
    - `injectStyles()`：注入 CSS 样式
    - `createAppContainer()`：创建应用容器
    - `initVueApp()`：初始化 Vue 应用
 
-3. **Vue 应用**
+6. **Vue 应用**
    - 响应式数据管理
    - 模板渲染
    - 事件处理
 
-4. **全局 API**
-   - `setMangaData()`：设置数据
+7. **全局 API**
+   - `setMangaData()`：设置漫画数据
+   - `setEntryVisible()`：控制入口按钮显示
+   - `setReaderVisible()`：控制阅读器显示
    - `exposeGlobalAPI()`：暴露全局接口
 
 ### 开发流程
@@ -442,23 +567,40 @@ cd manhuaReader
 **浏览器控制台：**
 ```javascript
 // 查看 Vue 实例
-console.log($vm)
+console.log(window.$vm)
 
 // 查看当前数据
-console.log($vm.manga)
-console.log($vm.chapter)
+console.log(window.$vm.manga)
+console.log(window.$vm.chapter)
 
 // 手动设置数据
-$setMangaData(yourData)
+$vmr.setMangaData(yourData)
+
+// 控制入口按钮
+$vmr.setEntryVisible(true)
+
+// 控制阅读器显示
+$vmr.setReaderVisible(true)
 
 // 切换主题
-$vm.toggleTheme()
+window.$vm.toggleTheme()
 ```
 
 **Tampermonkey 日志：**
 - 打开浏览器开发者工具
 - 查看 Console 标签
-- 搜索 `[Vue漫画阅读器]` 相关日志
+- 搜索 `[漫画阅读器]` 相关日志
+
+**日志示例：**
+```
+[漫画阅读器] 查找站点配置: manhua.zaimanhua.com
+[漫画阅读器] 当前站点配置: {name: "再漫画", spa: true, ...}
+[漫画阅读器] 阅读器初始化...
+[漫画阅读器] 阅读页匹配: /view/123 ✓
+[漫画阅读器] 检测到再漫画，开始提取数据...
+[漫画阅读器>再漫画适配器] 数据提取成功: {manga: "xxx", currentChapter: "xxx"}
+[漫画阅读器] 数据加载成功
+```
 
 ### 最佳实践
 
@@ -481,6 +623,12 @@ $vm.toggleTheme()
 - 使用 `v-if` 而非 `v-show` 控制显隐
 - 合理使用计算属性（computed）
 - 避免不必要的重渲染
+
+#### 5. SPA 适配
+- 如果网站是单页应用，务必设置 `spa: true`
+- 根据网站性能调整 `pathnamePollingDelay`
+- 如果需要等待数据加载，设置合适的 `loadDelay`
+- 测试章节切换是否能正确触发数据重新加载
 
 ## 📝 更新日志
 
@@ -560,7 +708,7 @@ $vm.toggleTheme()
 - huomangrandian - 原始作者
 - Lingma - 重构和优化
 
-## 🏗️ 技术架构 (v2.0.0)
+## 🏗️ 技术架构 (v2.1.0)
 
 ### 代码结构
 ```
@@ -580,6 +728,13 @@ manhuaReader.user.js
 │   ├── extractFromZaimanhua() - 再漫画适配器
 │   └── extractFromManhuagui() - 漫画柜适配器
 ├── 网站适配器配置 (WEBSITE_ADAPTERS)
+├── 数据加载器
+│   ├── getWebsite() - 检测当前网站
+│   ├── checkReadPage() - 检查是否为阅读页
+│   └── loadMangaData() - 加载漫画数据
+├── SPA 路由监听
+│   ├── startPathnameTimer() - 启动路由监听
+│   └── stopPathnameTimer() - 停止路由监听
 ├── Vue应用 (createVueApp)
 │   ├── 响应式状态 (ref/reactive)
 │   ├── 计算属性 (computed)
@@ -587,7 +742,9 @@ manhuaReader.user.js
 │   └── 监听器 (watch)
 └── 全局API
     ├── setMangaData() - 设置漫画数据
-    └── exposeGlobalAPI() - 暴露到window
+    ├── setEntryVisible() - 控制入口按钮
+    ├── setReaderVisible() - 控制阅读器显示
+    └── exposeGlobalAPI() - 暴露到window.$vmr
 ```
 
 ### 响应式设计
@@ -601,7 +758,27 @@ manhuaReader.user.js
 - ✅ 章节列表缓存（1小时TTL）
 - ✅ 纯CSS Tooltip（无JS开销）
 - ✅ 事件捕获阶段拦截（优先级最高）
-- ✅ 防抖节流（键盘事件）
+- ✅ SPA 路由监听（按需启用，可配置间隔）
+- ✅ 智能加载策略（统一的 loadData 函数）
+
+### SPA 支持机制
+
+**核心原理：**
+- 使用 `setInterval` 定时检测 `location.pathname` 变化
+- 仅在标记为 `spa: true` 的站点启用
+- 检测到变化后自动调用 `loadData()` 重新加载数据
+- 离开阅读页时自动隐藏阅读器
+
+**优势：**
+- ✅ 兼容性好：不依赖 History API 拦截
+- ✅ 配置灵活：每个站点可自定义检测频率
+- ✅ 资源节约：非 SPA 站点不启动监听
+- ✅ 用户体验：章节切换无需刷新页面
+
+**注意事项：**
+- 轮询间隔不宜过小（建议 ≥ 300ms）
+- 确保 `pathnameRegEx` 正确配置
+- 测试各种路由切换场景
 
 ---
 

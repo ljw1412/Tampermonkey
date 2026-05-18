@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         Vue漫画阅读器
+// @name         漫画阅读器
 // @namespace    http://tampermonkey.net/
 // @version      2.1.0
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
-// @match        https://manhua.zaimanhua.com/view/*
+// @match        https://manhua.zaimanhua.com/*
 // @match        https://www.manhuagui.com/comic/*/*.html
 // @require      https://unpkg.com/vue@3/dist/vue.global.prod.js
 // @grant        unsafeWindow
@@ -19,7 +19,7 @@
 
 // ==================== 常量配置 ====================
 const CONFIG = {
-  APP_NAME: 'Vue漫画阅读器',
+  APP_NAME: '漫画阅读器',
   CACHE_PREFIX: 'cache_',
   THEME_KEY: 'vmr-theme',
   DEFAULT_THEME: 'light',
@@ -229,6 +229,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
   background: var(--vmr-bg-primary);
 }
 .vmr-current-chapter { font-size: 14px; color: var(--vmr-text-primary); margin-bottom: 5px; }
+.vmr-current-chapter-pagecount { font-size: 12px; opacity: 0.75; }
 .vmr-chapter-nav { display: flex; gap: 10px; margin-top: 10px; }
 .vmr-chapter-nav button {
   flex: 1; padding: 8px 12px; border: none; border-radius: 4px;
@@ -242,13 +243,13 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 }
 
 .vmr-chapter-list {
-  display: grid; grid-template-columns: repeat(3, 1fr);
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   column-gap: 6px; row-gap: 6px; padding: 10px;
   color: var(--vmr-text-primary); overflow-y: auto; overflow-x: hidden;
 }
 .vmr-chapter-item {
-  padding: 12px 15px; border-radius: 6px; cursor: pointer;
-  transition: all 0.2s; background: var(--vmr-bg-secondary);
+  position: relative; padding: 16px 12px; border-radius: 6px; cursor: pointer;
+  text-align: center; transition: all 0.2s; background: var(--vmr-bg-secondary);
   border: 1px solid var(--vmr-border-color);
 }
 .vmr-chapter-item:hover { background: var(--vmr-hover-bg); border-color: var(--vmr-active-bg); }
@@ -260,7 +261,12 @@ a.vmr-manga-title:hover { text-decoration: underline; }
   font-size: 14px; font-weight: 500; overflow: hidden;
   white-space: nowrap; text-overflow: ellipsis;
 }
-.vmr-chapter-pagecount { font-size: 12px; opacity: 0.75; }
+.vmr-chapter-pagecount {
+  position: absolute; top: 0; right: 0; padding: 1px 3px;
+  font-size: 12px; color: var(--vmr-active-text); opacity: 0.75;
+  background-color: var(--vmr-active-bg);
+  border-top-right-radius: 5px; border-bottom-left-radius: 5px;
+}
 .vmr-chapter-update-time { font-size: 12px; color: var(--vmr-text-muted); margin-top: 4px; }
 .vmr-chapter-item.active .vmr-chapter-update-time { color: rgba(255,255,255,0.8); }
 
@@ -552,7 +558,7 @@ function extractFromZaimanhua() {
   try {
     const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
     if (!win.__NUXT__?.data) {
-      console.error('[再漫画适配器] 未找到 __NUXT__ 数据')
+      console.error('[漫画阅读器>再漫画适配器] 未找到 __NUXT__ 数据')
       return null
     }
 
@@ -561,7 +567,7 @@ function extractFromZaimanhua() {
     const chapterInfo = getChapters?.data?.chapterInfo
 
     if (!comicInfo || !chapterInfo) {
-      console.error('[再漫画适配器] 缺少必要数据')
+      console.error('[漫画阅读器>再漫画适配器] 缺少必要数据')
       return null
     }
 
@@ -603,7 +609,7 @@ function extractFromZaimanhua() {
     const previous = currentIndex > 0 ? list[currentIndex - 1] : null
     const next = currentIndex < list.length - 1 ? list[currentIndex + 1] : null
 
-    console.log('[再漫画适配器] 数据提取成功:', {
+    console.log('[漫画阅读器>再漫画适配器] 数据提取成功:', {
       manga: manga.title,
       currentChapter: current.name,
       totalChapters: list.length,
@@ -612,7 +618,7 @@ function extractFromZaimanhua() {
 
     return { manga, chapter: { current, previous, next, list } }
   } catch (error) {
-    console.error('[再漫画适配器] 提取失败:', error)
+    console.error('[漫画阅读器>再漫画适配器] 提取失败:', error)
     return null
   }
 }
@@ -629,7 +635,7 @@ async function extractFromManhuagui() {
     )
 
     if (!scriptElement) {
-      console.error('[漫画柜适配器] 未找到漫画信息脚本')
+      console.error('[漫画阅读器>漫画柜适配器] 未找到漫画信息脚本')
       return null
     }
 
@@ -644,7 +650,7 @@ async function extractFromManhuagui() {
     const pageVariables = unsafeWindow.pVars
 
     if (!chapterInfo || !pageVariables) {
-      console.error('[漫画柜适配器] 缺少必要数据')
+      console.error('[漫画阅读器>漫画柜适配器] 缺少必要数据')
       return null
     }
 
@@ -685,10 +691,10 @@ async function extractFromManhuagui() {
     let description = cache?.description || ''
 
     if (cache) {
-      console.log(`[漫画柜适配器] 使用缓存<${cacheKey}>`)
+      console.log(`[漫画阅读器>漫画柜适配器] 使用缓存<${cacheKey}>`)
     } else {
       try {
-        console.log('[漫画柜适配器] 从详情页提取章节列表')
+        console.log('[漫画阅读器>漫画柜适配器] 从详情页提取章节列表')
         const resp = await fetch(manga.url)
         const html = await resp.text()
         const doc = new DOMParser().parseFromString(html, 'text/html')
@@ -735,7 +741,7 @@ async function extractFromManhuagui() {
 
         list.push(...chapters)
       } catch (error) {
-        console.warn('[漫画柜适配器] 提取章节列表失败:', error)
+        console.warn('[漫画阅读器>漫画柜适配器] 提取章节列表失败:', error)
       }
     }
 
@@ -750,13 +756,13 @@ async function extractFromManhuagui() {
       if (!cache) {
         const cacheData = { author, description, chapters: list }
         $cache.set(cacheKey, cacheData, 3600)
-        console.log(`[漫画柜适配器] 保存缓存`, cacheData)
+        console.log(`[漫画阅读器>漫画柜适配器] 保存缓存`, cacheData)
       }
     } else {
       list.push(current)
     }
 
-    console.log('[漫画柜适配器] 数据提取成功:', {
+    console.log('[漫画阅读器>漫画柜适配器] 数据提取成功:', {
       manga: manga.title,
       currentChapter: current.name,
       totalChapters: list.length,
@@ -765,7 +771,7 @@ async function extractFromManhuagui() {
 
     return { manga, chapter: { current, previous, next, list } }
   } catch (error) {
-    console.error('[漫画柜适配器] 提取失败:', error)
+    console.error('[漫画阅读器>漫画柜适配器] 提取失败:', error)
     return null
   }
 }
@@ -774,8 +780,11 @@ async function extractFromManhuagui() {
 const WEBSITE_ADAPTERS = [
   {
     name: '再漫画',
+    spa: true,
     host: 'zaimanhua.com',
     pathnameRegEx: /^\/view\//,
+    pathnamePollingDelay: 500,
+    loadDelay: 1000,
     extract: extractFromZaimanhua
   },
   {
@@ -822,7 +831,8 @@ function createVueApp() {
       const sliderValue = ref(1)
 
       // UI状态
-      const isVisible = ref(false)
+      const isEntryVisible = ref(false)
+      const isReaderVisible = ref(false)
       const isUIVisible = ref(false)
       const isSidebarVisible = ref(false)
       const isClickZoneLocked = ref(false)
@@ -881,8 +891,8 @@ function createVueApp() {
       })
 
       // 方法
-      const setData = (data) => {
-        console.log('[Vue漫画阅读器] 接收到数据:', data)
+      const setData = (data, visible = true) => {
+        console.log('[漫画阅读器] 接收到数据:', data)
 
         if (data.manga) manga.value = data.manga
         if (data.chapter) {
@@ -896,19 +906,21 @@ function createVueApp() {
           if (data.chapter.list) chapter.list = data.chapter.list
         }
 
-        isVisible.value = true
-        isClickZoneLocked.value = true
-
-        setTimeout(() => {
-          isUIVisible.value = true
-          isSidebarVisible.value = true
+        if (visible) {
+          isReaderVisible.value = true
+          isClickZoneLocked.value = true
 
           setTimeout(() => {
-            // isUIVisible.value = false
-            isSidebarVisible.value = false
-            isClickZoneLocked.value = false
-          }, CONFIG.AUTO_HIDE_DELAY)
-        }, 100)
+            isUIVisible.value = true
+            isSidebarVisible.value = true
+
+            setTimeout(() => {
+              // isUIVisible.value = false
+              isSidebarVisible.value = false
+              isClickZoneLocked.value = false
+            }, CONFIG.AUTO_HIDE_DELAY)
+          }, 100)
+        }
       }
 
       const goToPage = (index) => {
@@ -1001,10 +1013,10 @@ function createVueApp() {
       }
 
       const closeReader = () => {
-        isVisible.value = false
+        isReaderVisible.value = false
       }
       const openReader = () => {
-        isVisible.value = true
+        isReaderVisible.value = true
       }
 
       const handleLeftClick = () => {
@@ -1043,7 +1055,7 @@ function createVueApp() {
 
       // 键盘事件处理
       const handleKeydown = (event) => {
-        if (!isVisible.value) return
+        if (!isReaderVisible.value) return
 
         const isFunctionKey =
           event.key.startsWith('F') &&
@@ -1080,8 +1092,16 @@ function createVueApp() {
         updateSliderPosition(newIndex + 1)
       })
 
-      watch(isVisible, (v) => {
+      watch(isReaderVisible, (v) => {
         document.documentElement.classList.toggle('vmr-overflow-hidden', v)
+        if (v) {
+          setTimeout(() => {
+            // 章节列表滚到到当前章节
+            const el = document.querySelector('.vmr-chapter-item.active')
+            if (el)
+              el.scrollIntoView({ block: 'nearest', container: 'nearest' })
+          }, 0)
+        }
       })
 
       watch(totalPages, (newTotal) => {
@@ -1108,7 +1128,8 @@ function createVueApp() {
         chapter,
         currentPageIndex,
         sliderValue,
-        isVisible,
+        isEntryVisible,
+        isReaderVisible,
         isUIVisible,
         isSidebarVisible,
         isClickZoneLocked,
@@ -1153,9 +1174,9 @@ function createVueApp() {
     },
 
     template: `
-      <div v-if="!isVisible" class="vmr-open-btn" @click="openReader" title="打开阅读器">📖</div>
+      <div v-if="isEntryVisible && !isReaderVisible" class="vmr-open-btn" @click="openReader" title="打开阅读器">📖</div>
 
-      <div v-if="isVisible" class="manga-reader-container" :data-theme="theme">
+      <div v-if="isReaderVisible" class="manga-reader-container" :data-theme="theme">
         <div class="vmr-reader-close-btn" @click="closeReader" title="关闭">
           ${getIcon('close')}
         </div>
@@ -1218,7 +1239,7 @@ function createVueApp() {
           <div class="vmr-chapter-info">
             <div class="vmr-current-chapter">
               当前: {{ chapter.current?.name || '未选择' }}
-              <span v-if="chapter.current?.pageCount" class="vmr-chapter-pagecount">{{ chapter.current.pageCount }}P</span>
+              <span v-if="chapter.current?.pageCount" class="vmr-current-chapter-pagecount">{{ chapter.current.pageCount }}P</span>
             </div>
             <div class="vmr-chapter-nav">
               <button :disabled="!hasPrevChapter" @click="loadChapter(chapter.previous)">← 上一章</button>
@@ -1227,12 +1248,11 @@ function createVueApp() {
           </div>
 
           <div class="vmr-chapter-list">
-            <div v-for="ch in chapter.list" :key="ch.id" class="vmr-chapter-item"
-                 :class="{ active: chapter.current?.id === ch.id }" :title="ch.name" @click="loadChapter(ch)">
+            <div v-for="ch in chapter.list" :key="ch.id" class="vmr-chapter-item" :class="{ active: chapter.current?.id === ch.id }" :title="ch.name" @click="loadChapter(ch)">
+              <div v-if="ch.pageCount" class="vmr-chapter-pagecount">
+                {{ ch.pageCount }}P</div>
               <div class="vmr-chapter-name">
-                {{ ch.name }}
-                <span v-if="ch.pageCount" class="vmr-chapter-pagecount">{{ ch.pageCount }}P</span>
-              </div>
+                {{ ch.name }}</div>
               <div class="vmr-chapter-update-time" v-if="ch.updateTime">{{ ch.updateTime }}</div>
             </div>
           </div>
@@ -1293,7 +1313,7 @@ function createVueApp() {
 
             <div v-else class="vmr-empty-state">
               <div class="vmr-empty-state-icon">📖</div>
-              <div class="vmr-empty-state-text">暂无内容，请使用 $setMangaData 加载漫画数据</div>
+              <div class="vmr-empty-state-text">暂无内容，请使用 $vmr.setMangaData 加载漫画数据</div>
             </div>
             
             <div class="vmr-manga-preload">
@@ -1307,82 +1327,147 @@ function createVueApp() {
 }
 
 // ==================== 全局API ====================
-function setMangaData(data) {
-  if (window.$vm) {
-    window.$vm.setData(data)
-    console.log('[Vue漫画阅读器] 数据已设置')
+function setEntryVisible(visible) {
+  if (!window.$vm) return console.error('[漫画阅读器] Vue应用未初始化')
+  window.$vm.setupState.isEntryVisible = visible
+  console.log(`[漫画阅读器] ${visible ? '启用' : '禁用'}阅读器入口`)
+}
+
+function setReaderVisible(visible) {
+  if (!window.$vm) console.error('[漫画阅读器] Vue应用未初始化')
+  if (visible) {
+    window.$vm.setupState.openReader()
   } else {
-    console.error('[Vue漫画阅读器] Vue应用未初始化')
+    window.$vm.setupState.closeReader()
   }
+  console.log(`[漫画阅读器] ${visible ? '显示' : '隐藏'}阅读器界面`)
+}
+
+function setMangaData(data) {
+  if (!window.$vm) console.error('[漫画阅读器] Vue应用未初始化')
+  window.$vm.setupState.setData(data)
+  console.log('[漫画阅读器] 数据已设置')
 }
 
 function exposeGlobalAPI() {
   const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
-  win.$setMangaData = setMangaData
-  console.log('[Vue漫画阅读器] 全局API已暴露: $setMangaData')
+  win.$vmr = {
+    $vm: window.$vm,
+    setMangaData,
+    setEntryVisible,
+    setReaderVisible
+  }
+  console.log('[漫画阅读器] 全局API已暴露: $vmr', $vmr)
 }
 
 // ==================== 数据加载器 ====================
-async function loadMangaData() {
+function getWebsite() {
   const host = location.host
-  const pathname = location.pathname
-
-  console.log('[Vue漫画阅读器] 检测网站:', host)
-
-  const website = WEBSITE_ADAPTERS.find((site) => {
-    const hostMatch = host.includes(site.host)
-    if (!hostMatch) return false
-    if (site.pathnameRegEx) return site.pathnameRegEx.test(pathname)
-    return true
-  })
-
-  if (!website) {
-    console.log('[Vue漫画阅读器] 未找到匹配的网站配置')
-    return
+  console.log('[漫画阅读器] 查找站点配置:', host)
+  const website = WEBSITE_ADAPTERS.find((site) => host.includes(site.host))
+  if (website) {
+    console.log('[漫画阅读器] 当前站点配置:', website)
+    return website
   }
+  console.log(`[漫画阅读器] 未找到${host}对应的站点配置`)
+}
 
-  console.log(`[Vue漫画阅读器] 检测到${website.name}，开始提取数据...`)
+function checkReadPage(website) {
+  const pathname = location.pathname
+  if (!website.pathnameRegEx) {
+    console.log(`[漫画阅读器] ${website.name} 未配置阅读页路径规则`)
+    return false
+  }
+  const isMatch = website.pathnameRegEx.test(pathname)
+  console.log(`[漫画阅读器] 阅读页匹配: ${pathname} ${isMatch ? '✓' : '✗'}`)
+  return isMatch
+}
 
+async function loadMangaData(website, skipCheck = false) {
   try {
+    if (!skipCheck && !checkReadPage(website)) throw new Error('非阅读页！')
+    console.log(`[漫画阅读器] 检测到${website.name}，开始提取数据...`)
     const data = await website.extract()
     if (data) {
       setMangaData(data)
-      console.log('[Vue漫画阅读器] 数据加载成功')
+      console.log('[漫画阅读器] 数据加载成功')
     } else {
-      console.warn('[Vue漫画阅读器] 未能提取到数据')
+      console.warn('[漫画阅读器] 未能提取到数据')
     }
   } catch (error) {
-    console.error(`[Vue漫画阅读器] ${website.name}数据提取失败:`, error)
+    console.error(`[漫画阅读器] ${website.name}数据提取失败:`, error)
   }
+}
+
+// T 针对非Hash模式下的SPA的pathname变化监听
+let lastPathname = ''
+let pathnameTimer = null
+
+function stopPathnameTimer() {
+  if (!pathnameTimer) return
+  clearInterval(pathnameTimer)
+  pathnameTimer = null
+}
+
+function startPathnameTimer(fn = () => {}, delay = 500) {
+  stopPathnameTimer()
+  lastPathname = location.pathname
+  pathnameTimer = setInterval(() => {
+    const currentPathname = window.location.pathname
+    if (currentPathname !== lastPathname) {
+      console.log('[漫画阅读器] 检测到路由变化！新路径为:', currentPathname)
+      if (typeof fn === 'function') fn()
+      lastPathname = currentPathname
+    }
+  }, delay)
 }
 
 // ==================== 主程序入口 ====================
 ;(function () {
   'use strict'
-
-  console.log('[Vue漫画阅读器] 初始化...')
-
   // 清理过期缓存
   $cache.clearExpired()
+  // 站点匹配
+  const website = getWebsite()
+  if (!website) {
+    console.log('[漫画阅读器] 未找到站点配置，不进行初始化')
+    return
+  }
 
+  console.log('[漫画阅读器] 阅读器初始化...')
   // Vue注入
   if (!unsafeWindow.Vue) unsafeWindow.Vue = Vue
-
   // 注入样式
   GM_addStyle(STYLES)
-
-  // 创建容器并挂载Vue应用
+  // 创建容器
   const container = document.createElement('div')
   container.id = 'vue-manga-reader'
   document.body.appendChild(container)
-
+  // 创建Vue应用挂载容器并将实例暴露在window
   const app = createVueApp()
   const $vm = app.mount(container)
-  window.$vm = $vm
-
+  window.$vm = $vm._
   // 暴露全局API
   exposeGlobalAPI()
 
-  // 延迟加载数据
-  setTimeout(loadMangaData, 1000)
+  function loadData() {
+    const isReadPage = checkReadPage(website)
+    // 延迟加载数据
+    if (isReadPage) {
+      setTimeout(() => {
+        loadMangaData(website, true)
+      }, website.loadDelay || 0)
+    }
+    setEntryVisible(isReadPage)
+    return isReadPage
+  }
+
+  loadData()
+
+  if (website.spa) {
+    startPathnameTimer(() => {
+      const isReadPage = loadData()
+      if (!isReadPage) setReaderVisible(false)
+    }, website.pathnamePollingDelay)
+  }
 })()
