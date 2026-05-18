@@ -38,235 +38,155 @@ const ICONS = {
 }
 
 // ==================== 深色模式CSS样式 ====================
+
+/* prettier-ignore */
+const darkThemeConfig = {
+  // --- color ---
+  'color: var(--color-primary)': [
+    '.hlist a:hover', '.book-sort li a:hover', '.support li.pfunc a.current', '.book-detail dt a:hover'
+  ],
+  'color: var(--color-text-1)': [
+    'a', '.topper', '.footer', '.footer-wrap', '.footer-main', 
+    '.category-list h3', '.nav-less', '.book-sort h5', 
+    '.chapter-list li a:hover'
+  ],
+  'color: var(--color-text-2)': [
+    '#Tdownload', '.bar-tab', '.book-intro', '.intro-act', '.score-vote', 
+    '.score-per p', '.commentBox h2 .t_c', '.comment_tab', '.rank', 
+    '.content_r .text', '.content_r .info_bar .userName', '.book-detail dd strong', '.chapter-list li a', '.chapter-cont a.title', '.update-info', '.latest-cont strong'
+  ],
+  'color: var(--color-text-3)': ['.footer-cont', '.book-detail dd'],
+  // --- background / background-color ---
+  'background: none !important': ['.intro_l > .title','.intro_l + div > .title'],
+  'background: var(--color-primary)': ['.chapter-list li a:hover'],
+  'background: var(--color-bg-1)': ['.category-list h3'], 
+  'background: var(--color-bg-2)': ['.bar-title', '.bar-tab'], 
+  'background-color: var(--color-bg-2)': [
+    '.topper', '.footer', '.footer-wrap', '.footer-main', '.bar-title', '.latest-cont h5'
+  ],
+  'background: var(--color-bg-3)': ['.pager a', '.pager span'],
+  'background-color: var(--color-bg-3)': [
+    '.user-view .panel', '.filter-click a', '.filter-nav', '.reminder-cont',
+    '.index-cont', '.score', '.stitle', '.recent-cont', '.book-similar',
+    '.update-title h2', '.chapter-bar', '.chapter-bar h3', '.chapter-list li a',
+    '.comment', '.sub-btn', '.support li a', '.book-result', '.category-list', 
+    '.top-cont', '.rank-detail th', '.pager a', '.pager span', '.idx-mc-cont',
+    '.idx-rank-cont', '.idx-rank-more a', '.idx-sc-cont'
+  ],
+  'background-color: var(--color-bg-4)': ['.filter-title h2', '.idx-sc-cont h4', '.idx-sc-bar li'],
+  'background-color: var(--color-fill-2)': ['.hlist li:hover', '.filter:hover'],
+  'background-color: var(--color-fill-3)': [
+    '.hlist-remove', '.book-sort li.current', '.top-tab ul li.selected',
+    '.support li.pfunc a.current', '.idx-mc-title li.on', '.idx-rank-tab a.on',
+    '.idx-sc-bar li.on', '.latest-tab ul li.selected', '.book-sort li.selected',
+    '.rank-detail tr:hover', '.category-list li:hover','.reminder-cont li:hover'
+  ],
+  'background-color: var(--color-fill-4)': ['.user-area .over .handle'],
+  'background-color: #df8f27': ['.nav-less'],
+  // --- border / border-color ---
+  'border-color: var(--color-border-1)': ['.footer-wrap', '.footer-main'],
+  'border-color: var(--color-border-2)': [
+    '.topper', '.footer', '.hlist li', '.user-feedback', '.user-view .handle', '.user-view .panel', '.box-gray', '.bar-title', '.bar-tab', '.book-sort h5', '.filter-click', '.filter-nav .filter', '.book-result li', '.score', '.stitle', '.recent-cont', '.book-similar', '.chapter-bar', '.chapter-bar h3', '.chapter-list li a', '.comment', '.sub-btn', '.support li a', '.book-result', '.category-list', '.top-cont', '.rank-detail th', '.pager a', '.pager span', '.chapter-list li a:hover span', '.idx-mc-cont', '.idx-sc', 
+    '.update-title h2', '.latest-cont h5', '.intro_l', '.intro_l + div *',
+    '.chapter-list *', '.score *', '.comment *', '.recent-cont *', '.rank-detail *', '.category-list *', '.bar-tab *', '.idx-sc-list *','.idx-sc *', '.intro_l *'
+  ],
+  'border-color: var(--color-border-4)': ['.nav-less'],
+  // --- box-shadow ---
+  'box-shadow: 1px 1px 3px var(--color-border-2)': ['.shadow'],
+  'box-shadow: 0 1px 3px var(--color-border-2)': ['.topper'],
+  'box-shadow: none': [
+    '.score', '.stitle', '.recent-cont', '.book-similar', '.chapter-bar', 
+    '.chapter-bar h3', '.chapter-list li a', '.comment', '.sub-btn', 
+    '.support li a', '.book-result', '.category-list', '.top-cont', '.rank-detail th'
+  ]
+};
+
+function generateCssString(config, prefix = '') {
+  const selectorMap = new Map()
+  // 1. 遍历配置，按“完整选择器”归类所有的样式规则
+  for (const [styleRule, selectors] of Object.entries(config)) {
+    selectors.forEach((selector) => {
+      const fullSelector = `${prefix} ${selector.trim()}`
+      if (selectorMap.has(fullSelector)) {
+        selectorMap.get(fullSelector).push(styleRule)
+      } else {
+        selectorMap.set(fullSelector, [styleRule])
+      }
+    })
+  }
+  // 2. 将 Map 中的结果拼接成最终的 CSS 字符串
+  let cssText = ''
+  selectorMap.forEach((rules, selector) => {
+    // 将该选择器的所有样式规则用分号连接
+    cssText += `${selector} {\n  ${rules.join(';\n  ')};\n}\n\n`
+  })
+  return cssText.trim()
+}
+
 const DARK_MODE_STYLES = `
-  .btn-theme-switch {
-    position: fixed;
-    bottom: 175px;
-    right: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    font-size: 30px;
-    line-height: 1;
-    color: #fff;
-    background-color: var(--theme-switch-bg, rgba(0, 0, 0, 0.15));
-    cursor: pointer;
-    z-index: 10001;
-  }
-  .btn-theme-switch:hover {
-    background-color: #e32727;
-  }
-  .btn-theme-switch > svg {
-    width: 1em;
-    height: 1em;
-    opacity: var(--theme-switch-opacity, 0.8);
-  }
-  .btn-theme-switch:hover > svg {
-    opacity: 1;
-  }
+.btn-theme-switch {
+  position: fixed;
+  bottom: 175px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  font-size: 30px;
+  line-height: 1;
+  color: #fff;
+  background-color: var(--theme-switch-bg, rgba(0, 0, 0, 0.15));
+  cursor: pointer;
+  z-index: 10001;
+}
+.btn-theme-switch:hover {
+  background-color: #e32727;
+}
+.btn-theme-switch > svg {
+  width: 1em;
+  height: 1em;
+  opacity: var(--theme-switch-opacity, 0.8);
+}
+.btn-theme-switch:hover > svg {
+  opacity: 1;
+}
 
-  html[data-theme='dark'] {
-    --color-primary: #fe4800;
-    --color-white: rgba(255, 255, 255, .9);
-    --color-black: #000000;
-    --color-bg-1: #17171a;
-    --color-bg-2: #232324;
-    --color-bg-3: #2a2a2b;
-    --color-bg-4: #313132;
-    --color-bg-5: #373739;
-    --color-bg-white: #f6f6f6;
-    --color-text-1: rgba(255, 255, 255, .9);
-    --color-text-2: rgba(255, 255, 255, .7);
-    --color-text-3: rgba(255, 255, 255, .5);
-    --color-text-4: rgba(255, 255, 255, .3);
-    --color-fill-1: rgba(255, 255, 255, .04);
-    --color-fill-2: rgba(255, 255, 255, .08);
-    --color-fill-3: rgba(255, 255, 255, .12);
-    --color-fill-4: rgba(255, 255, 255, .16);
-    --color-border: #333335;
-    --color-border-1: #2e2e30;
-    --color-border-2: #484849;
-    --color-border-3: #5f5f60;
-    --color-border-4: #929293;
-    --theme-switch-bg: rgba(255, 255, 255, 0.35);
-    --theme-switch-opacity: 0.3;
+html[data-theme='dark'] {
+  --color-primary: #fe4800;
+  --color-white: rgba(255, 255, 255, .9);
+  --color-black: #000000;
+  --color-bg-1: #17171a;
+  --color-bg-2: #232324;
+  --color-bg-3: #2a2a2b;
+  --color-bg-4: #313132;
+  --color-bg-5: #373739;
+  --color-bg-white: #f6f6f6;
+  --color-text-1: rgba(255, 255, 255, .9);
+  --color-text-2: rgba(255, 255, 255, .7);
+  --color-text-3: rgba(255, 255, 255, .5);
+  --color-text-4: rgba(255, 255, 255, .3);
+  --color-fill-1: rgba(255, 255, 255, .04);
+  --color-fill-2: rgba(255, 255, 255, .08);
+  --color-fill-3: rgba(255, 255, 255, .12);
+  --color-fill-4: rgba(255, 255, 255, .16);
+  --color-border: #333335;
+  --color-border-1: #2e2e30;
+  --color-border-2: #484849;
+  --color-border-3: #5f5f60;
+  --color-border-4: #929293;
+  --theme-switch-bg: rgba(255, 255, 255, 0.35);
+  --theme-switch-opacity: 0.3;
 
-    color: var(--color-text-2);
-    background-color: var(--color-bg-1);
-  }
+  color: var(--color-text-2);
+  background-color: var(--color-bg-1);
+}
 
-  html[data-theme='dark'] a {
-    color: var(--color-text-1);
-  }
+html[data-theme='dark'] * {
+  text-shadow: none !important;
+}
 
-  html[data-theme='dark'] > * {
-    text-shadow: none !important;
-  }
-
-  html[data-theme='dark'] .topper,
-  html[data-theme='dark'] .footer,
-  html[data-theme='dark'] .footer-wrap,
-  html[data-theme='dark'] .footer-main {
-    color: var(--color-text-1);
-    background-color: var(--color-bg-2);
-  }
-
-  html[data-theme='dark'] .topper{
-    border-color: var(--color-border-2);
-    box-shadow: 0 1px 3px var(--color-border-2);
-  }
-
-  html[data-theme='dark'] .footer {
-    border-color: var(--color-border-2);
-  }
-
-  html[data-theme='dark'] .footer-wrap,
-  html[data-theme='dark'] .footer-main {
-    border-color: var(--color-border-1);
-  }
-
-  html[data-theme='dark'] .footer-cont {
-    color: var(--color-text-3);
-  }
-    
-  html[data-theme='dark'] .user-area .over .handle {
-    background-color: var(--color-fill-4);
-  }
-
-  html[data-theme='dark'] .user-view .panel {
-    background-color: var(--color-bg-3);
-  }
-
-  html[data-theme='dark'] .hlist li:hover {
-    background-color: var(--color-fill-2);
-  }
-
-  html[data-theme='dark'] .hlist a:hover {
-    color: var(--color-primary);
-  }
-
-  html[data-theme='dark'] .hlist-remove {
-    background-color: var(--color-fill-3);
-  }
-
-  html[data-theme='dark'] .nav-less {
-    color: var(--color-text-1);
-    background-color: #df8f27;
-    border-color: var(--color-border-4);
-  }
-
-  html[data-theme='dark'] .box-gray {
-    border: 1px solid var(--color-border-2);
-  }
-
-  html[data-theme='dark'] .bar-title {
-    background: var(--color-bg-2);
-    border-color: 1px solid var(--color-border-2);
-  }
-
-  html[data-theme='dark'] .filter-title h2 {
-    background-color: var(--color-bg-4);
-  }
-
-  html[data-theme='dark'] .filter-click {
-    border-color: var(--color-border-2);
-  }
-    
-  html[data-theme='dark'] .filter-click a {
-    background-color: var(--color-bg-3);
-  }
-
-  html[data-theme='dark'] .filter-nav {
-    background-color: var(--color-bg-3);
-  }
-
-  html[data-theme='dark'] .filter-nav .filter {
-    border-color: var(--color-border-2);
-  }
-
-  html[data-theme='dark'] .filter:hover {
-    background-color: var(--color-fill-2);
-  }
-
-  html[data-theme='dark'] .bar-tab {
-    background: var(--color-bg-2);
-    border-color: var(--color-border-2);
-  }
-
-  html[data-theme='dark'] .book-sort h5 {
-    color: var(--color-text-1);
-    border-color: var(--color-border-2);
-  }
-
-  html[data-theme='dark'] .book-sort li {
-    border-color: var(--color-border-2);
-  }
-
-  html[data-theme='dark'] .book-sort li.current,
-  html[data-theme='dark'] .support li.pfunc a.current {
-    background-color: var(--color-fill-3);
-  }
-
-  html[data-theme='dark'] .support li.pfunc a.current {
-    color: var(--color-primary);
-  }
-
-  html[data-theme='dark'] .chapter-list *,
-  html[data-theme='dark'] .score *,
-  html[data-theme='dark'] .comment *,
-  html[data-theme='dark'] .recent-cont * {
-    border-color: var(--color-border-2);
-  }
-
-  html[data-theme='dark'] #Tdownload,
-  html[data-theme='dark'] .bar-tab,
-  html[data-theme='dark'] .book-intro,
-  html[data-theme='dark'] .intro-act,
-  html[data-theme='dark'] .score-vote,
-  html[data-theme='dark'] .score-per p,
-  html[data-theme='dark'] .commentBox h2 .t_c,
-  html[data-theme='dark'] .comment_tab,
-  html[data-theme='dark'] .content_r .text,
-  html[data-theme='dark'] .content_r .info_bar .userName {
-    color: var(--color-text-2);
-  }
-
-  html[data-theme='dark'] .score,
-  html[data-theme='dark'] .stitle,
-  html[data-theme='dark'] .recent-cont,
-  html[data-theme='dark'] .book-similar,
-  html[data-theme='dark'] .chapter-bar,
-  html[data-theme='dark'] .chapter-bar h3,
-  html[data-theme='dark'] .chapter-list li a,
-  html[data-theme='dark'] .comment,
-  html[data-theme='dark'] .sub-btn,
-  html[data-theme='dark'] .support li a {
-    background-color: var(--color-bg-3);
-    border-color: var(--color-border-2);
-    box-shadow: none;
-  }
-  
-  html[data-theme='dark'] .pager a,
-  html[data-theme='dark'] .pager span {
-    background: var(--color-bg-3);
-    border-color: var(--color-border-2);
-  }
-
-  html[data-theme='dark'] .chapter-list li a {
-    color: var(--color-text-2);
-    box-shadow: none;
-  }
-
-  html[data-theme='dark'] .chapter-list li a:hover {
-    color: var(--color-text-1);
-    background: var(--color-primary);
-  }
-
-  html[data-theme='dark'] .chapter-list li a:hover span{
-    border-color: var(--color-white);
-  }
+${generateCssString(darkThemeConfig, 'html[data-theme="dark"]')}
 `
 
 // ==================== Aria2菜单管理 ====================
