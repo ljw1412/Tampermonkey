@@ -1081,6 +1081,9 @@ function createVueApp() {
             else if (isSidebarVisible.value) isSidebarVisible.value = false
             else isUIVisible.value = false
             break
+          case 'Enter':
+            if (confirmDialog.isVisible) handleConfirm()
+            break
         }
       }
 
