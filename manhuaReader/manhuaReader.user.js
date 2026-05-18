@@ -923,6 +923,28 @@ function createVueApp() {
         }
       }
 
+      const nextChapter = () => {
+        if (!hasNextChapter.value) return showToast('已经是最后一章了')
+        showConfirmDialog(
+          '跳转到下一章',
+          `是否跳转到下一章《${chapter.next?.name || ''}》？`,
+          () => {
+            loadChapter(chapter.next)
+          }
+        )
+      }
+
+      const prevChapter = () => {
+        if (!hasPrevChapter.value) return showToast('已经是第一章了')
+        showConfirmDialog(
+          '跳转到上一章',
+          `是否跳转到上一章《${chapter.previous?.name || ''}》？`,
+          () => {
+            loadChapter(chapter.previous)
+          }
+        )
+      }
+
       const goToPage = (index) => {
         if (index >= 0 && index < totalPages.value) {
           currentPageIndex.value = index
@@ -933,16 +955,8 @@ function createVueApp() {
         if (isUIVisible.value) isUIVisible.value = false
         if (currentPageIndex.value < totalPages.value - 1) {
           currentPageIndex.value++
-        } else if (hasNextChapter.value) {
-          showConfirmDialog(
-            '跳转到下一章',
-            `是否跳转到下一章《${chapter.next?.name || ''}》？`,
-            () => {
-              loadChapter(chapter.next)
-            }
-          )
         } else {
-          showToast('已经是最后一章了')
+          nextChapter()
         }
       }
 
@@ -950,16 +964,8 @@ function createVueApp() {
         if (isUIVisible.value) isUIVisible.value = false
         if (currentPageIndex.value > 0) {
           currentPageIndex.value--
-        } else if (hasPrevChapter.value) {
-          showConfirmDialog(
-            '跳转到上一章',
-            `是否跳转到上一章《${chapter.previous?.name || ''}》？`,
-            () => {
-              loadChapter(chapter.previous)
-            }
-          )
         } else {
-          showToast('已经是第一章了')
+          prevChapter()
         }
       }
 
@@ -1076,12 +1082,16 @@ function createVueApp() {
         console.log(event)
 
         switch (event.key) {
+          case 'ArrowUp':
+            prevChapter()
+            break
           case 'ArrowDown':
+            nextChapter()
+            break
           case 'ArrowRight':
             if (confirmDialog.isVisible) handleCancel()
             nextPage()
             break
-          case 'ArrowUp':
           case 'ArrowLeft':
             if (confirmDialog.isVisible) handleCancel()
             prevPage()
