@@ -62,7 +62,7 @@ const darkThemeConfig = {
   'background: var(--color-bg-1)': ['.category-list h3'], 
   'background: var(--color-bg-2)': ['.bar-title', '.bar-tab'], 
   'background-color: var(--color-bg-2)': [
-    '.topper', '.footer', '.footer-wrap', '.footer-main', '.bar-title', '.latest-cont h5', '.reply_content'
+    '.topper', '.footer', '.footer-wrap', '.footer-main', '.bar-title', '.latest-cont h5', '.reply_content', '.chapter-page li:not(.on) a'
   ],
   'background: var(--color-bg-3)': ['.pager a', '.pager span'],
   'background-color: var(--color-bg-3)': [
