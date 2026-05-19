@@ -211,15 +211,23 @@ const STYLES = `
   color: white;
 }
 .vmr-manga-title {
-  font-size: 18px; font-weight: bold; margin-bottom: 8px; padding: 0 18px;
+  margin-bottom: 8px; padding: 0 18px; font-size: 18px; font-weight: bold;
   color: inherit; text-decoration: none;
 }
 a.vmr-manga-title:hover { text-decoration: underline; }
-.vmr-manga-author { margin-top: 6px; font-size: 14px; opacity: 0.9; padding: 0 18px; }
+.vmr-manga-author { margin-top: 6px; padding: 0 18px; font-size: 14px; opacity: 0.9; }
+.vmr-manga-status-and-tags {
+  display: flex; align-items: center; flex-wrap: wrap;
+  margin-top: 4px; padding: 0 18px; opacity: 0.9; }
+.vmr-manga-status-and-tags > * {
+  flex-shrink: 0; display: inline-block; box-sizing: content-box; 
+  margin-top: 4px; padding: 4px; height: 10px; font-size: 10px; 
+  border: 1px solid currentColor; border-radius: 4px; }
+.vmr-manga-status-and-tags > *:not(:last-child) { margin-right: 4px; }
 
 .vmr-manga-desc {
   margin-top: 6px; padding: 0 18px;  color: white; opacity: 0.85;
-  font-size: 13px; line-height: 1.6; min-height: 1.6em; max-height: 6.4em;
+  font-size: 13px; line-height: 1.4; min-height: 1.4em; max-height: 5.6em;
   overflow-y: auto; word-break: break-all; box-sizing: content-box; flex-shrink: 0;
 }
 .vmr-manga-desc::-webkit-scrollbar-track { background: transparent; }
@@ -574,9 +582,15 @@ function extractFromZaimanhua() {
     const manga = {
       id: comicInfo.id,
       title: comicInfo.title || '未知标题',
-      author: comicInfo.authorsTagList?.map((a) => a.tagName).join('、'),
+      author:
+        comicInfo.authorsTagList?.map((a) => a.tagName).join('、') ||
+        '未知作者',
       cover: comicInfo.cover,
       description: comicInfo.description,
+      status: comicInfo.statusTagList?.[0]?.tagName || '未知状态',
+      tags: [...comicInfo.cateTagList, ...comicInfo.themeTagList].map(
+        (tag) => tag.tagName
+      ),
       url: `${location.origin}/details/${chapterInfo.comic_id}`
     }
 
@@ -654,8 +668,7 @@ async function extractFromManhuagui() {
       return null
     }
 
-    const { bid, bname, bpic, cid, cname, len, files, sl, prevId, nextId } =
-      chapterInfo
+    const { bid, bname, bpic, finished } = chapterInfo
 
     const manga = {
       id: bid,
@@ -663,8 +676,12 @@ async function extractFromManhuagui() {
       author: '未知作者',
       cover: bpic ? `https://cf.mhgui.com/cpic/h/${bpic}` : '',
       description: '',
+      status: finished ? '已完结' : '连载中',
+      tags: [],
       url: '.'
     }
+
+    const { cid, cname, len, files, sl, prevId, nextId } = chapterInfo
 
     const current = {
       id: cid + '',
@@ -689,6 +706,7 @@ async function extractFromManhuagui() {
     const list = cache?.chapters || []
     let author = cache?.author || ''
     let description = cache?.description || ''
+    let tags = cache?.tags || []
 
     if (cache) {
       console.log(`[漫画阅读器>漫画柜适配器] 使用缓存<${cacheKey}>`)
@@ -707,8 +725,18 @@ async function extractFromManhuagui() {
         if (authorEl) {
           author = Array.from(authorEl.parentElement.childNodes)
             .filter((n) => n !== authorEl)
-            .map((n) => n.textContent)
+            .map((n) => n.textContent.trim().replace(/^,$/, '、'))
             .join('')
+        }
+
+        // 提取标签
+        const tagLabelEl = Array.from(
+          doc.querySelectorAll('.book-detail .detail-list li span strong')
+        ).find((el) => ['剧情', '劇情'].some((t) => el.innerText.includes(t)))
+        if (tagLabelEl) {
+          tags = Array.from(tagLabelEl.parentElement.querySelectorAll('a')).map(
+            (n) => n.textContent.trim()
+          )
         }
 
         // 提取简介
@@ -747,6 +775,7 @@ async function extractFromManhuagui() {
 
     if (author) manga.author = author
     if (description) manga.description = description
+    if (tags.length) manga.tags = tags
 
     if (list.length > 0) {
       const currentIndex = list.findIndex((ch) => ch.id === current.id)
@@ -754,7 +783,7 @@ async function extractFromManhuagui() {
       if (currentIndex < list.length - 1) next = list[currentIndex + 1]
 
       if (!cache) {
-        const cacheData = { author, description, chapters: list }
+        const cacheData = { author, description, tags, chapters: list }
         $cache.set(cacheKey, cacheData, 3600)
         console.log(`[漫画阅读器>漫画柜适配器] 保存缓存`, cacheData)
       }
@@ -1181,7 +1210,7 @@ function createVueApp() {
         prevPage,
         loadChapter,
         toggleSidebar,
-        toggleToolbar: toggleUI,
+        toggleUI,
         toggleTheme,
         handleThemeChange,
         handlePreloadCountChange,
@@ -1261,6 +1290,14 @@ function createVueApp() {
             <a v-if="manga?.url" class="vmr-manga-title" :href="manga.url" target="_blank" rel="noopener noreferrer">{{ manga?.title || '未加载漫画' }}</a>
             <div v-else class="vmr-manga-title">{{ manga?.title || '未加载漫画' }}</div>
             <div class="vmr-manga-author">{{ manga?.author || '未知作者' }}</div>
+            <div v-if="manga.status || ( Array.isArray(manga.tags) && manga.tags.length )" class="vmr-manga-status-and-tags">
+              <span class="vmr-manga-status" :style="{ color: manga.status?.includes('完结') ? '#f53f3f' : '#00b42a' }">
+                {{ manga.status }}
+              </span>
+              <span v-for="tag of manga.tags || []" class="vmr-manga-tag">
+                {{ tag }}
+              </span>
+            </div>
             <div v-if="manga?.description" class="vmr-manga-desc">{{ manga.description }}</div>
           </div>
 
