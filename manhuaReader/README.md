@@ -2,8 +2,8 @@
 
 基于 Vue 3 的 Tampermonkey 漫画阅读器，提供统一的阅读界面和数据接口。
 
-**最新版本**: v2.1.0 (2026-05-18)  
-**核心特性**: SPA 路由监听、智能站点适配、完善的日志系统
+**最新版本**: v2.1.1 (2026-05-19)  
+**核心特性**: SPA 路由监听、智能站点适配、完善的日志系统、阅读器设置面板
 
 ## 📋 目录
 
@@ -47,6 +47,14 @@
 - **自动隐藏**：首次进入显示 1 秒后自动隐藏 UI
 - **一键切换**：工具栏按钮快速控制侧边栏和主题
 - **SPA 无缝切换**：单页应用中章节切换无需刷新页面，自动加载新数据
+
+### 🔧 v2.1.1 更新 (2026-05-19)
+- 🎨 **新增阅读器设置面板**：点击工具栏设置按钮（⚙️）打开设置面板
+  - 支持自定义主题风格（亮色/暗色）
+  - 支持自定义预载数量（0-5张图片）
+  - 设置自动保存，立即生效
+- ✨ **优化预载策略**：用户可灵活控制图片预加载数量，平衡性能和流量
+- 📝 **完善UI交互**：设置面板采用优雅的对话框设计，支持点击遮罩关闭
 
 ### 🔧 v2.1.0 新特性
 - ✨ **SPA 路由监听**：支持非 Hash 模式的单页应用，自动检测 pathname 变化
@@ -134,7 +142,7 @@
 #### 方式二：编程方式
 ```
 // 在控制台执行
-$vm.toggleTheme()  // 切换主题
+$vmr.$vm.setupState.toggleTheme()  // 切换主题
 ```
 
 ### 持久化存储
@@ -179,8 +187,11 @@ container.style.setProperty('--vmr-bg-primary', '#your-color')
 |------|------|------|
 | `←` / `ArrowLeft` | 上一页 | 第一页时显示确认对话框跳转到上一章 |
 | `→` / `ArrowRight` | 下一页 | 最后一页时显示确认对话框跳转到下一章 |
-| `Space` | 下一页 | 同右箭头 |
-| `Esc` | 关闭 UI | 优先级：确认对话框 > 侧边栏 > 工具栏 |
+| `↑` / `ArrowUp` | 上一章 | 直接跳转到上一章（需确认） |
+| `↓` / `ArrowDown` | 下一章 | 直接跳转到下一章（需确认） |
+| `Space` | 显示/隐藏 UI | 切换工具栏和侧边栏显示状态 |
+| `Enter` | 确认/切换 UI | 对话框中确认操作，否则切换 UI |
+| `Esc` | 关闭 UI | 优先级：确认对话框 > 设置面板 > 侧边栏 > 工具栏 |
 
 ### 事件拦截机制
 
@@ -210,7 +221,9 @@ event.stopImmediatePropagation()
 
 **拦截的按键：**
 - 🔒 `ArrowLeft` / `ArrowRight` - 翻页操作
-- 🔒 `Escape` - 关闭 UI/侧边栏/对话框
+- 🔒 `ArrowUp` / `ArrowDown` - 章节跳转
+- 🔒 `Escape` - 关闭 UI/设置面板/侧边栏/对话框
+- 🔒 `Space` / `Enter` - UI 控制和确认操作
 
 **优势：**
 - ✅ **优先级最高**：捕获阶段从外到内传播（window → document → body），在 document 层面即可拦截
@@ -229,7 +242,7 @@ event.stopImmediatePropagation()
 
 #### 适配器结构
 
-```javascript
+```
 const WEBSITE_ADAPTERS = [
   {
     name: '网站名称',
@@ -257,7 +270,7 @@ const WEBSITE_ADAPTERS = [
 
 #### 数据提取函数
 
-``javascript
+```
 function extractDataFromSite() {
   try {
     // 1. 从页面提取原始数据
@@ -285,7 +298,7 @@ function extractDataFromSite() {
 
 #### 工作原理
 
-``javascript
+```
 // 1. 启动路由监听器（仅在标记为 spa: true 的站点）
 if (website.spa) {
   startPathnameTimer(() => {
@@ -323,7 +336,7 @@ function loadData() {
 
 **再漫画 (zaimanhua.com)** 是一个典型的 SPA 站点：
 
-``javascript
+```
 {
   name: '再漫画',
   spa: true,                        // 标记为 SPA
@@ -346,7 +359,7 @@ function loadData() {
 
 对于传统多页应用，不需要启用路由监听：
 
-``javascript
+```
 {
   name: '漫画柜',
   host: 'manhuagui.com',
@@ -549,7 +562,7 @@ manhuaReader/
 ### 开发流程
 
 #### 1. 克隆项目
-```bash
+```
 git clone <repository-url>
 cd manhuaReader
 ```
@@ -565,13 +578,13 @@ cd manhuaReader
 #### 4. 调试技巧
 
 **浏览器控制台：**
-```javascript
+```
 // 查看 Vue 实例
 console.log(window.$vm)
 
 // 查看当前数据
-console.log(window.$vm.manga)
-console.log(window.$vm.chapter)
+console.log($vmr.$vm.setupState.manga)
+console.log($vmr.$vm.setupState.chapter)
 
 // 手动设置数据
 $vmr.setMangaData(yourData)
@@ -583,7 +596,13 @@ $vmr.setEntryVisible(true)
 $vmr.setReaderVisible(true)
 
 // 切换主题
-window.$vm.toggleTheme()
+$vmr.$vm.setupState.toggleTheme()
+
+// 查看当前主题
+console.log($vmr.$vm.setupState.theme.value)
+
+// 查看预载数量设置
+console.log($vmr.$vm.setupState.preloadCount.value)
 ```
 
 **Tampermonkey 日志：**
@@ -632,50 +651,55 @@ window.$vm.toggleTheme()
 
 ## 📝 更新日志
 
-### v1.3.0 (2026-05-15)
-- ✨ 新增智能缓存系统，提升数据加载性能
-- ✨ 实现 CacheManager 类，统一管理缓存数据
-- ✨ 漫画柜适配器支持章节列表缓存（1小时TTL）
-- ✨ 自动清理过期缓存，避免存储空间浪费
-- 🔧 优化错误处理，确保缓存数据完整性
-- 📝 更新脚本版本号为 1.3.0
+### v2.1.1 (2026-05-19)
+- ✨ 新增阅读器设置面板，支持自定义主题风格和预载数量
+- ✨ 实现设置对话框 UI，采用优雅的毛玻璃效果设计
+- ✨ 添加预载数量配置（0-5张），用户可灵活控制性能与流量平衡
+- ✨ 设置项自动保存到 GM_storage，下次打开自动应用
+- 🎨 优化设置面板交互体验，支持点击遮罩关闭
+- 🎨 单选按钮样式优化，选中状态带有边框高亮和阴影效果
+- 📝 动态提示文本，根据预载数量显示不同的说明信息
+- 🔧 改进全局 API 访问方式，统一使用 `$vmr.$vm.setupState`
+- 📝 更新脚本版本号为 2.1.1
 
-### v1.2.0 (2026-05-15)
-- ✨ 新增暗色主题支持
-- ✨ 使用 CSS 变量实现主题系统
-- ✨ 主题偏好持久化保存（GM_getValue/GM_setValue）
-- ✨ 工具栏添加主题切换按钮
-- 🎨 优化所有 UI 元素支持主题切换
-- 📝 更新脚本版本号为 1.2.0
-
-### v1.1.1 (2026-05-15)
-- ✨ 新增漫画柜网站适配器支持
-- ✨ 实现从加密脚本中提取章节数据
-- ✨ 自动解析作者信息（从详情页 DOM）
-- ✨ 支持通过 prevId/nextId 直接导航上下章
-- ✨ 异步加载完整章节列表
-- 🔧 优化变量命名，提高代码可读性
-- 🐛 修复图片 URL 构建逻辑，支持时效性认证参数
-
-### v1.1.0 (2026-05-15)
-- ✨ 重构 UI 布局为悬浮式设计
-- ✨ 侧边栏改为左侧滑入滑出
-- ✨ 工具栏改为顶部滑入滑出
-- ✨ 主体内容分为左中右三个点击区域
-- ✨ 添加章节边界跳转确认对话框
-- ✨ 添加 Toast 提示框
-- ✨ 恢复右上角关闭按钮
-- 🎨 所有 CSS 类名添加 vmr- 前缀防止冲突
-- 🎨 优化首次进入自动显示 1.5 秒后隐藏
-- 🔧 封装 toast 和 confirmDialog 为 reactive 对象
-
-### v1.0.0 (2026-05-15)
-- 🎉 初始版本发布
-- ✨ 基于 Vue 3 构建漫画阅读器
-- ✨ 支持再漫画网站
-- ✨ 提供统一的数据接口
-- ✨ 侧边栏显示章节列表
-- ✨ 支持键盘快捷键操作
+### v2.1.0 (2026-05-18)
+- ✨ **SPA 路由监听**：完美支持单页应用（SPA），自动检测 pathname 变化并重新加载数据
+  - 使用 `setInterval` 定时检测路由变化
+  - 仅在标记为 `spa: true` 的站点启用
+  - 可配置的轮询间隔（`pathnamePollingDelay`）
+  - 离开阅读页时自动隐藏阅读器
+- 📝 **增强日志系统**：完善的日志输出，便于调试和问题排查
+  - 网站检测日志：显示查找过程和匹配结果
+  - 页面类型检查日志：显示路径匹配状态
+  - 数据加载日志：显示提取进度和结果
+  - 路由变化日志：显示 pathname 变化详情
+- 🎯 **配置化适配器**：每个站点可独立配置行为参数
+  - `spa`: 是否启用路由监听
+  - `loadDelay`: 数据加载延迟时间
+  - `pathnamePollingDelay`: SPA 路由检测间隔
+- 🔄 **统一加载策略**：`loadData()` 函数统一管理初始化和路由变化的数据加载
+  - 自动检测页面类型
+  - 根据配置延迟加载数据
+  - 控制入口按钮显示状态
+- 🔧 **技术改进**：
+  - 数据加载器重构：职责分离，配置驱动
+  - SPA 路由监听模块：智能防抖，定时器清理
+  - 全局 API 优化：修复 Vue 3 CDN 版本实例访问
+  - 错误处理增强：明确的错误信息和详细日志
+- 🎨 **UI/UX 优化**：
+  - SPA 无缝体验：章节切换无需刷新页面
+  - 智能显示控制：自动显示/隐藏阅读器
+  - 日志可视化：清晰的日志前缀和结构化输出
+- 🐛 **Bug 修复**：
+  - 修复 Vue 3 CDN 版本实例访问问题
+  - 修复 SPA 场景下路由变化无法感知的问题
+  - 修复非阅读页时仍然尝试加载数据的问题
+  - 修复日志输出不完整的问题
+- 📚 **文档更新**：
+  - 添加 SPA 支持详解
+  - 更新适配器配置字段说明
+  - 添加路由监听工作原理
+  - 更新现有适配器说明
 
 ## 🤝 贡献指南
 
@@ -708,7 +732,7 @@ window.$vm.toggleTheme()
 - huomangrandian - 原始作者
 - Lingma - 重构和优化
 
-## 🏗️ 技术架构 (v2.1.0)
+## 🏗️ 技术架构 (v2.1.1)
 
 ### 代码结构
 ```
@@ -723,7 +747,7 @@ manhuaReader.user.js
 ├── CSS样式 (STYLES)
 │   ├── 亮色主题变量
 │   ├── 暗色主题变量
-│   └── 组件样式
+│   └── 组件样式（含设置面板样式）
 ├── 数据提取器
 │   ├── extractFromZaimanhua() - 再漫画适配器
 │   └── extractFromManhuagui() - 漫画柜适配器
@@ -737,9 +761,20 @@ manhuaReader.user.js
 │   └── stopPathnameTimer() - 停止路由监听
 ├── Vue应用 (createVueApp)
 │   ├── 响应式状态 (ref/reactive)
+│   │   ├── manga, chapter, currentPageIndex
+│   │   ├── theme, preloadCount (新增)
+│   │   ├── isSettingsVisible (新增)
+│   │   └── UI状态管理
 │   ├── 计算属性 (computed)
 │   ├── 方法 (methods)
+│   │   ├── toggleSettings, closeSettings (新增)
+│   │   ├── handleThemeChange, handlePreloadCountChange (新增)
+│   │   └── 其他业务方法
 │   └── 监听器 (watch)
+├── 设置面板 (新增)
+│   ├── 主题风格选择
+│   ├── 预载数量配置
+│   └── 动态提示文本
 └── 全局API
     ├── setMangaData() - 设置漫画数据
     ├── setEntryVisible() - 控制入口按钮
@@ -748,37 +783,19 @@ manhuaReader.user.js
 ```
 
 ### 响应式设计
-- **简单值**: 使用 `ref()` - manga, currentPageIndex, theme等
+- **简单值**: 使用 `ref()` - manga, currentPageIndex, theme, preloadCount等
 - **复杂对象**: 使用 `reactive()` - chapter, toast, confirmDialog
 - **计算属性**: 使用 `computed()` - totalPages, currentImage等
 - **副作用**: 使用 `watch()` - 同步滑块、更新CSS变量
 
 ### 性能优化
-- ✅ 图片预加载（前后各2张）
+- ✅ 图片预加载（可配置前后各0-5张）
 - ✅ 章节列表缓存（1小时TTL）
 - ✅ 纯CSS Tooltip（无JS开销）
 - ✅ 事件捕获阶段拦截（优先级最高）
 - ✅ SPA 路由监听（按需启用，可配置间隔）
 - ✅ 智能加载策略（统一的 loadData 函数）
-
-### SPA 支持机制
-
-**核心原理：**
-- 使用 `setInterval` 定时检测 `location.pathname` 变化
-- 仅在标记为 `spa: true` 的站点启用
-- 检测到变化后自动调用 `loadData()` 重新加载数据
-- 离开阅读页时自动隐藏阅读器
-
-**优势：**
-- ✅ 兼容性好：不依赖 History API 拦截
-- ✅ 配置灵活：每个站点可自定义检测频率
-- ✅ 资源节约：非 SPA 站点不启动监听
-- ✅ 用户体验：章节切换无需刷新页面
-
-**注意事项：**
-- 轮询间隔不宜过小（建议 ≥ 300ms）
-- 确保 `pathnameRegEx` 正确配置
-- 测试各种路由切换场景
+- ✅ 设置持久化（GM_setValue/GM_getValue）
 
 ---
 

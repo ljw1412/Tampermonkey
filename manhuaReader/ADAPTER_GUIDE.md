@@ -2,8 +2,8 @@
 
 本文档详细说明如何为 manhuaReader 添加新的漫画网站支持。
 
-**最新版本**: v2.1.0 (2026-05-18)  
-**新增特性**: SPA 路由监听、配置化轮询间隔、增强日志系统
+**最新版本**: v2.1.1 (2026-05-19)  
+**新增特性**: SPA 路由监听、配置化轮询间隔、增强日志系统、阅读器设置面板
 
 ## 📋 目录
 
@@ -76,6 +76,12 @@
    - 定时检测 pathname 变化
    - 自动触发数据重新加载
 
+6. **阅读器设置管理** (v2.1.1+)
+   - 主题风格设置（亮色/暗色）
+   - 预载数量配置（0-5张）
+   - 自动持久化保存（GM_setValue/GM_getValue）
+   - 设置面板 UI 交互
+
 ## 📊 数据结构规范
 
 ### 标准数据格式
@@ -89,14 +95,18 @@
     title: string,           // 漫画标题（必填）
     author: string,          // 作者名称（可选）
     cover: string,           // 封面图片URL（可选）
-    description: string      // 漫画简介（可选）
+    description: string,     // 漫画简介（可选）
+    status: string,          // 连载状态（可选，如"连载中"、"已完结"）
+    tags: string[],          // 标签数组（可选）
+    url: string              // 漫画详情页URL（可选）
   },
   chapter: {
     current: {               // 当前章节（必填）
       id: string|number,     // 章节ID（必填）
       name: string,          // 章节名称（必填）
       url: string,           // 章节URL（必填）
-      images: string[]       // 图片URL数组（必填）
+      images: string[],      // 图片URL数组（必填）
+      pageCount: number      // 当前章节总页数（可选）
     },
     previous: {              // 上一章（可选，无则为null）
       id: string|number,
@@ -112,7 +122,18 @@
       id: string|number,     // 章节ID（必填）
       name: string,          // 章节名称（必填）
       url: string,           // 章节URL（必填）
-      updateTime: string     // 更新时间 YYYY-MM-DD（可选）
+      updatedAt: string,     // 更新时间 YYYY-MM-DD（可选）
+      pageCount: number      // 章节页数（可选）
+    }],
+    groups: [{               // 章节分组列表（必填）
+      title: string,         // 分组标题（必填，如"正篇"、"番外"）
+      data: [{               // 该分组的章节列表（必填）
+        id: string|number,   // 章节ID（必填）
+        name: string,        // 章节名称（必填）
+        url: string,         // 章节URL（必填）
+        updatedAt: string,   // 更新时间（可选）
+        pageCount: number    // 章节页数（可选）
+      }]
     }]
   }
 }
@@ -127,12 +148,65 @@
 - `chapter.current.name`：不能为空字符串
 - `chapter.current.url`：必须是有效的 URL
 - `chapter.current.images`：必须是数组，至少包含一个元素
-- `chapter.list`：必须是数组
+- `chapter.list`：必须是数组，至少包含一个元素
+- **`chapter.groups`：必须是数组，至少包含一个分组**（用于UI展示章节列表）
+- `chapter.groups[].title`：分组标题，不能为空
+- `chapter.groups[].data`：该分组的章节列表，必须是数组
 
 #### 可选字段
 
-- 如果不存在上一章/下一章，设置为 `null`
-- 其他可选字段可以省略或设为空字符串
+- `manga.id`：漫画ID
+- `manga.author`：作者名称
+- `manga.cover`：封面图片URL
+- `manga.description`：漫画简介
+- `manga.status`：连载状态（如"连载中"、"已完结"）
+- `manga.tags`：标签数组
+- `manga.url`：漫画详情页URL
+- `chapter.current.pageCount`：当前章节总页数
+- `chapter.previous` / `chapter.next`：上一章/下一章信息（为 null 表示没有）
+- `chapter.list[].updatedAt`：章节更新时间（格式：YYYY-MM-DD）
+- `chapter.list[].pageCount`：章节页数
+- `chapter.groups[].data[].updatedAt`：章节更新时间
+- `chapter.groups[].data[].pageCount`：章节页数
+
+#### 重要说明
+
+**`chapter.groups` 是必填字段**，原因：
+1. Vue 模板中使用 `v-for="group in chapter.groups"` 遍历显示章节列表
+2. 如果缺少该字段，侧边栏的章节列表将无法显示
+3. 即使只有一个分组，也必须提供该字段
+
+**示例：单分组情况**
+```javascript
+groups: [
+  {
+    title: '章节',
+    data: [
+      { id: '1', name: '第1话', url: '/chapter/1' },
+      { id: '2', name: '第2话', url: '/chapter/2' }
+    ]
+  }
+]
+```
+
+**示例：多分组情况**
+```javascript
+groups: [
+  {
+    title: '正篇',
+    data: [
+      { id: '1', name: '第1话', url: '/chapter/1' },
+      { id: '2', name: '第2话', url: '/chapter/2' }
+    ]
+  },
+  {
+    title: '番外',
+    data: [
+      { id: 'sp1', name: '特别篇1', url: '/chapter/sp1' }
+    ]
+  }
+]
+```
 
 ### URL 格式建议
 
@@ -842,366 +916,289 @@ async function loadMangaData() {
 }
 ```
 
+### 示例 5：完整功能网站（含状态、标签、分组）
+
+```
+/**
+ * 从完整功能网站提取漫画数据
+ * @returns {Object|null} 转换后的漫画数据，失败返回null
+ */
+async function extractDataFromFullFeaturedSite() {
+  try {
+    const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
+
+    // 1. 提取漫画基本信息
+    const manga = {
+      id: 'comic_id',
+      title: '漫画标题',
+      author: '作者名称',
+      cover: '封面URL',
+      description: '漫画简介',
+      status: '连载中',  // 或 '已完结'
+      tags: ['冒险', '热血', '少年'],
+      url: '/comic/123'  // 详情页URL
+    }
+
+    // 2. 提取当前章节信息
+    const current = {
+      id: 'chapter_id',
+      name: '第1话',
+      url: win.location.href,
+      images: ['image1.jpg', 'image2.jpg'],
+      pageCount: 50  // 总页数
+    }
+
+    // 3. 构建章节分组列表
+    const groups = [
+      {
+        title: '正篇',
+        data: [
+          { id: '1', name: '第1话', url: '/chapter/1', updatedAt: '2024-01-01', pageCount: 50 },
+          { id: '2', name: '第2话', url: '/chapter/2', updatedAt: '2024-01-08', pageCount: 45 }
+        ]
+      },
+      {
+        title: '番外',
+        data: [
+          { id: 'sp1', name: '特别篇1', url: '/chapter/sp1', updatedAt: '2024-02-01', pageCount: 30 }
+        ]
+      }
+    ]
+
+    // 4. 扁平化章节列表（用于查找上下章）
+    const list = groups.flatMap(group => group.data)
+
+    // 5. 找到上一章和下一章
+    const currentIndex = list.findIndex(ch => ch.id === current.id)
+    const previous = currentIndex > 0 ? list[currentIndex - 1] : null
+    const next = currentIndex < list.length - 1 ? list[currentIndex + 1] : null
+
+    return {
+      manga,
+      chapter: { 
+        current, 
+        previous, 
+        next, 
+        list,
+        groups  // 分组信息用于UI展示
+      }
+    }
+  } catch (error) {
+    console.error('[完整功能网站适配器] 提取数据失败:', error)
+    return null
+  }
+}
+```
+
+**优势：**
+- ✅ 支持章节分组显示（正篇、番外等）
+- ✅ 显示章节更新时间和页数
+- ✅ 提供完整的漫画元数据（状态、标签等）
+- ✅ UI 展示更丰富，用户体验更好
+
 ## 🔍 调试技巧
 
-### 技巧 1：控制台调试
+### 控制台调试命令
 
 ```
-// 1. 查看页面所有全局变量
-console.table(
-  Object.keys(window).filter(
-    (k) => !k.startsWith('__') && typeof window[k] !== 'function'
-  )
-)
+// 查看 Vue 实例
+console.log($vmr.$vm)
 
-// 2. 搜索可能包含数据的变量
-Object.keys(window).forEach((key) => {
-  if (
-    key.toLowerCase().includes('comic') ||
-    key.toLowerCase().includes('manga') ||
-    key.toLowerCase().includes('chapter')
-  ) {
-    console.log(key, window[key])
-  }
-})
+// 查看当前漫画数据
+console.log($vmr.$vm.setupState.manga.value)
 
-// 3. 查看特定元素的数据
-const el = document.querySelector('.target-element')
-console.log(el.dataset)
-console.log(el.getAttribute('data-id'))
+// 查看章节信息
+console.log($vmr.$vm.setupState.chapter)
+
+// 查看当前设置
+console.log('主题:', $vmr.$vm.setupState.theme.value)
+console.log('预载数量:', $vmr.$vm.setupState.preloadCount.value)
+
+// 手动切换主题
+$vmr.$vm.setupState.toggleTheme()
+
+// 手动修改预载数量
+$vmr.$vm.setupState.preloadCount.value = 3
+
+// 打开/关闭设置面板
+$vmr.$vm.setupState.toggleSettings()
+$vmr.$vm.setupState.closeSettings()
+
+// 手动设置数据
+$vmr.setMangaData(yourData)
+
+// 控制阅读器显示
+$vmr.setReaderVisible(true)
+$vmr.setReaderVisible(false)
+
+// 控制入口按钮
+$vmr.setEntryVisible(true)
+$vmr.setEntryVisible(false)
 ```
 
-### 技巧 2：网络请求监控
+### 日志级别
 
-1. 打开开发者工具
-2. 切换到 Network 标签
-3. 刷新页面
-4. 查找 API 请求（通常是 XHR/Fetch 类型）
-5. 查看请求响应数据
+脚本使用以下日志前缀：
 
-### 技巧 3：键盘事件拦截测试
+- `[漫画阅读器]` - 主日志（初始化、路由变化等）
+- `[漫画阅读器>再漫画适配器]` - 站点特定日志
+- `[漫画阅读器] 阅读页匹配: /view/123 ✓` - 状态指示
 
-如果你的适配器需要处理键盘事件，可以使用以下方法测试：
+### 常见问题排查
 
+**问题1：设置面板无法打开**
 ```
-// 1. 检查是否有其他监听器
-getEventListeners(document) // Chrome DevTools API
+// 检查设置面板状态
+console.log($vmr.$vm.setupState.isSettingsVisible.value)
 
-// 2. 测试事件拦截
-document.addEventListener('keydown', (e) => {
-  console.log('捕获到按键:', e.key)
-}, true)
-
-// 3. 验证 stopImmediatePropagation 效果
-// 在阅读器可见时，原网站的键盘快捷键应该失效
+// 手动打开
+$vmr.$vm.setupState.toggleSettings()
 ```
 
-**最佳实践：**
-- 使用捕获阶段 (`true`) 注册监听器，优先级最高
-- **智能放行机制**：检测功能键（F1-F12）和修饰键组合（Shift/Ctrl/Alt/Meta），直接返回不拦截
-- 调用 `preventDefault()`、`stopPropagation()` 和 `stopImmediatePropagation()`
-- 只需在 `document` 上注册，无需在 `body` 重复注册
-- 仅在阅读器可见时才拦截事件
+**问题2：主题切换无效**
+```
+// 检查主题值
+console.log($vmr.$vm.setupState.theme.value)
 
-**示例代码：**
-```javascript
-const handleKeydown = (event) => {
-  if (!isVisible.value) return
+// 检查容器 data-theme 属性
+console.log(document.querySelector('.manga-reader-container').dataset.theme)
 
-  // 放行功能键和组合键
-  const isFunctionKey = event.key.startsWith('F') && event.key.length >= 2 && event.key.length <= 3
-  const hasModifier = event.shiftKey || event.ctrlKey || event.altKey || event.metaKey
-  if (isFunctionKey || hasModifier) return
-
-  // 拦截阅读器专用快捷键
-  event.preventDefault()
-  event.stopPropagation()
-  event.stopImmediatePropagation()
-
-  // 处理具体按键...
-}
+// 手动切换
+$vmr.$vm.setupState.toggleTheme()
 ```
 
-### 技巧 4：数据验证
-
+**问题3：预载数量设置未保存**
 ```
-// 验证提取的数据
-function validateData(data) {
-  const errors = []
+// 检查 GM_setValue 是否成功
+GM_setValue('vmr-preload-count', 3)
+console.log(GM_getValue('vmr-preload-count'))  // 应该输出 3
 
-  if (!data.manga?.title) {
-    errors.push('缺少漫画标题')
-  }
-
-  if (!data.chapter?.current?.images?.length) {
-    errors.push('缺少图片列表')
-  }
-
-  if (!data.chapter?.list?.length) {
-    errors.push('缺少章节列表')
-  }
-
-  if (errors.length > 0) {
-    console.error('数据验证失败:', errors)
-    return false
-  }
-
-  console.log('数据验证通过')
-  return true
-}
+// 检查响应式变量
+console.log($vmr.$vm.setupState.preloadCount.value)
 ```
-
-### 技巧 5：SPA 路由监听测试
-
-如果你的适配器支持 SPA，可以使用以下方法测试：
-
-```
-// 1. 检查是否启用了路由监听
-console.log('SPA 支持:', website?.spa)
-console.log('轮询间隔:', website?.pathnamePollingDelay)
-
-// 2. 模拟路由变化
-const originalPathname = location.pathname
-history.pushState({}, '', '/view/test-chapter')
-
-// 3. 观察日志输出
-// 应该看到 "[漫画阅读器] 检测到路由变化！新路径为: /view/test-chapter"
-
-// 4. 恢复原路径
-history.pushState({}, '', originalPathname)
-
-// 5. 检查数据是否正确加载
-console.log('当前章节:', $vm.chapter.current?.name)
-```
-
-**最佳实践：**
-- 确保 `pathnameRegEx` 正确配置
-- 测试各种路由切换场景
-- 验证数据是否正确重新加载
-- 检查 UI 状态是否正确更新（显示/隐藏）
-- 监控性能影响（CPU 和内存占用）
 
 ## ❓ 常见问题
 
-### Q1: 如何获取动态加载的数据？
+### Q1: 如何判断网站是否为 SPA？
 
-**方法一：等待数据加载**
+**方法一：观察行为**
+- 章节切换时页面是否刷新
+- URL 变化但无网络请求
+- 使用前端路由库（Vue Router、React Router 等）
 
-```
-function extractDataFromSite() {
-  return new Promise((resolve) => {
-    const checkData = setInterval(() => {
-      if (window.DYNAMIC_DATA) {
-        clearInterval(checkData)
-        resolve(processData(window.DYNAMIC_DATA))
-      }
-    }, 100)
+**方法二：检查代码**
+```javascript
+// 查看是否有路由库
+console.log(window.VueRouter)  // Vue Router
+console.log(window.ReactRouter)  // React Router
 
-    // 超时处理
-    setTimeout(() => {
-      clearInterval(checkData)
-      resolve(null)
-    }, 5000)
-  })
+// 查看 History API 使用情况
+const originalPushState = history.pushState
+history.pushState = function() {
+  console.log('pushState called:', arguments)
+  return originalPushState.apply(this, arguments)
 }
 ```
 
-**方法二：监听 DOM 变化**
+### Q2: 如何提取加密或混淆的数据？
+
+有些网站会对数据进行加密或混淆，需要特殊处理：
 
 ```
-const observer = new MutationObserver((mutations) => {
-  // 检测到数据加载后提取
-  if (document.querySelector('.data-loaded')) {
-    observer.disconnect()
-    extractData()
+// 示例：解密 eval 包裹的数据
+const evalKeyword = 'window["\\x65\\x76\\x61\\x6c"]'
+const scriptElement = document.querySelector('script')
+const rawData = new Function(
+  'return ' + scriptElement.innerText.replace(evalKeyword, '')
+)()
+const jsonData = JSON.parse(rawData)
+```
+
+### Q3: 如何处理分页加载的图片？
+
+如果图片是分页加载的，需要等待所有图片加载完成：
+
+```
+async function extractImages() {
+  const images = []
+  let page = 1
+  
+  while (true) {
+    const response = await fetch(`/api/images?page=${page}`)
+    const data = await response.json()
+    
+    if (!data.images || data.images.length === 0) break
+    
+    images.push(...data.images)
+    page++
   }
-})
-
-observer.observe(document.body, {
-  childList: true,
-  subtree: true
-})
-```
-
-### Q2: 如何使用缓存优化性能？
-
-**使用 CacheManager：**
-
-```
-// 1. 定义缓存键
-const cacheKey = `sitename-${mangaId}`
-
-// 2. 尝试从缓存读取
-const cache = $cache.get(cacheKey)
-
-if (cache) {
-  // 使用缓存数据
-  console.log('使用缓存')
-  return processData(cache)
+  
+  return images
 }
+```
 
-// 3. 获取新数据
-const data = await fetchData()
+### Q4: 如何实现智能缓存策略？
 
-// 4. 保存到缓存（1小时TTL）
+根据数据更新频率选择合适的 TTL：
+
+```
+// 高频更新数据（章节列表）：1小时
 $cache.set(cacheKey, data, 3600)
 
-return data
+// 低频更新数据（漫画信息）：24小时
+$cache.set(cacheKey, data, 86400)
+
+// 几乎不变的数据（作者信息）：7天
+$cache.set(cacheKey, data, 604800)
 ```
 
-**最佳实践：**
-- 选择合适的 TTL（通常 1-24 小时）
-- 仅在成功获取完整数据时才保存缓存
-- 缓存键应包含网站标识和资源ID
-- 定期清理过期缓存（脚本启动时自动执行）
+### Q5: 如何处理跨域请求？
 
-### Q3: 缓存的数据存储在哪里？
+Tampermonkey 脚本可以使用 `GM_xmlhttpRequest` 进行跨域请求：
 
-**Tampermonkey 存储：**
+```
+// 在脚本头部添加
+// @grant        GM_xmlhttpRequest
 
-缓存数据通过 `GM_setValue` 和 `GM_getValue` API 存储在 Tampermonkey 的本地存储中。
-
-**查看缓存：**
-```javascript
-// 在控制台查看所有缓存键
-console.log(GM_listValues())
-
-// 查看特定缓存
-console.log(GM_getValue('cache_sitename-123'))
-
-// 清除所有缓存
-GM_listValues().forEach(key => {
-  if (key.startsWith('cache_')) {
-    GM_deleteValue(key)
+// 使用 GM_xmlhttpRequest
+GM_xmlhttpRequest({
+  method: 'GET',
+  url: 'https://api.example.com/data',
+  onload: function(response) {
+    const data = JSON.parse(response.responseText)
+    // 处理数据
+  },
+  onerror: function(error) {
+    console.error('请求失败:', error)
   }
 })
 ```
 
-**存储限制：**
-- 取决于浏览器和 Tampermonkey 配置
-- 通常足够存储数百个漫画的章节列表
-- 过期缓存会自动清理
+### Q6: 如何适配不同的章节分组方式？
 
-### Q4: 如何判断网站是否是 SPA？
+有些网站按卷分组，有些按时间分组：
 
-**方法一：观察页面行为**
 ```
-1. 打开漫画章节页
-2. 点击"下一章"按钮
-3. 观察：
-   - 如果页面闪烁/刷新 → 不是 SPA
-   - 如果页面平滑过渡 → 可能是 SPA
-```
+// 按卷分组
+const groups = volumes.map(volume => ({
+  title: `第${volume.number}卷`,
+  data: volume.chapters
+}))
 
-**方法二：检查 Network 面板**
-```
-1. 打开开发者工具 → Network 标签
-2. 点击"下一章"
-3. 观察：
-   - 如果有新的 document 请求 → 不是 SPA
-   - 如果只有 API 请求或无请求 → 是 SPA
-```
-
-**方法三：检查路由库**
-```javascript
-// 查找常见的前端路由库
-console.log(window.VueRouter)    // Vue Router
-console.log(window.ReactRouter)  // React Router
-console.log(window.ng)           // Angular Router
-```
-
-**方法四：监听路由事件**
-```javascript
-// 监听 popstate 事件（浏览器前进/后退）
-window.addEventListener('popstate', (e) => {
-  console.log('检测到 popstate 事件', location.pathname)
+// 按时间分组（年-月）
+const groupedByMonth = {}
+chapters.forEach(chapter => {
+  const month = chapter.date.substring(0, 7)  // "2024-01"
+  if (!groupedByMonth[month]) groupedByMonth[month] = []
+  groupedByMonth[month].push(chapter)
 })
 
-// 如果章节切换时触发此事件，说明是 SPA
+const groups = Object.entries(groupedByMonth).map(([month, data]) => ({
+  title: month,
+  data
+}))
 ```
-
-### Q5: SPA 路由监听的性能影响？
-
-**资源占用：**
-- 每 500ms 执行一次简单的字符串比较
-- CPU 占用：< 0.1%
-- 内存占用：约 1KB（存储 lastPathname）
-
-**优化建议：**
-- 仅在需要的站点启用（`spa: true`）
-- 根据设备性能调整轮询间隔
-- 避免在回调函数中执行耗时操作
-
-**对比其他方案：**
-```javascript
-// ❌ History API 拦截（复杂，可能冲突）
-const originalPushState = history.pushState
-history.pushState = function() { /* ... */ }
-
-// ✅ pathname 轮询（简单，可靠）
-setInterval(() => {
-  if (location.pathname !== lastPathname) { /* ... */ }
-}, 500)
-```
-
-### Q6: 如何处理 SPA 中的数据加载延迟？
-
-有些 SPA 在路由变化后需要异步加载数据，此时需要设置 `loadDelay`：
-
-```
-{
-  name: '某SPA网站',
-  spa: true,
-  loadDelay: 1500,  // 等待 1.5s 让页面完成数据加载
-  extract: extractData
-}
-```
-
-**或者在提取函数中等待数据：**
-
-```javascript
-async function extractDataFromSPASite() {
-  // 等待数据加载完成
-  await waitForData()
-  
-  // 提取数据
-  return processData()
-}
-
-function waitForData(timeout = 3000) {
-  return new Promise((resolve, reject) => {
-    const checkInterval = setInterval(() => {
-      if (window.PAGE_DATA) {
-        clearInterval(checkInterval)
-        resolve()
-      }
-    }, 100)
-    
-    setTimeout(() => {
-      clearInterval(checkInterval)
-      reject(new Error('数据加载超时'))
-    }, timeout)
-  })
-}
-```
-
-## 📚 参考资源
-
-- [Vue 3 官方文档](https://cn.vuejs.org/)
-- [Tampermonkey API](https://www.tampermonkey.net/documentation.php)
-- [MDN Web Docs](https://developer.mozilla.org/)
-
-## 🤝 贡献
-
-欢迎提交新的网站适配器！
-
-**提交前请确保：**
-
-- [ ] 代码符合规范
-- [ ] 经过充分测试
-- [ ] 添加了必要的注释
-- [ ] 更新了文档
 
 ---
 
-**祝开发顺利！** 🎉
+**祝你开发顺利！** 🚀

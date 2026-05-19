@@ -250,10 +250,12 @@ a.vmr-manga-title:hover { text-decoration: underline; }
   cursor: not-allowed; transform: none;
 }
 
+.vmr-chapter-group-list { user-select: none; overflow-y: auto; overflow-x: hidden; }
+.vmr-chapter-group{ padding: 10px; }
+.vmr-chapter-group-title { margin-bottom: 10px; text-align: center; color: var(--vmr-text-primary); font-size: 16px; font-weight: bold; }
 .vmr-chapter-list {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-  column-gap: 6px; row-gap: 6px; padding: 10px;
-  color: var(--vmr-text-primary); overflow-y: auto; overflow-x: hidden;
+  column-gap: 6px; row-gap: 6px; color: var(--vmr-text-primary); 
 }
 .vmr-chapter-item {
   position: relative; padding: 16px 12px; border-radius: 6px; cursor: pointer;
@@ -603,21 +605,19 @@ function extractFromZaimanhua() {
     current.pageCount = current.images.length
 
     // 构建章节列表
-    const chapterListData = comicInfo.chapterList?.[0]?.data || []
-    const list = chapterListData
-      .map((ch) => ({
+    const groups = comicInfo.chapterList.map((group) => ({
+      title: group.title,
+      data: group.data.map((ch) => ({
         id: ch.chapter_id,
         name: ch.chapter_title,
         url: `./${ch.chapter_id}`,
-        updateTime: formatTimestamp(ch.updatetime)
+        updatedAt: formatTimestamp(ch.updatetime),
+        order: ch.chapter_order
       }))
-      .sort((a, b) => {
-        const orderA =
-          chapterListData.find((c) => c.chapter_id === a.id)?.chapter_order || 0
-        const orderB =
-          chapterListData.find((c) => c.chapter_id === b.id)?.chapter_order || 0
-        return orderA - orderB
-      })
+    }))
+    const list = groups
+      .flatMap((group) => group.data)
+      .sort((a, b) => a.order - b.order)
 
     const currentIndex = list.findIndex((ch) => ch.id === current.id)
     const previous = currentIndex > 0 ? list[currentIndex - 1] : null
@@ -630,7 +630,7 @@ function extractFromZaimanhua() {
       totalPages: current.images.length
     })
 
-    return { manga, chapter: { current, previous, next, list } }
+    return { manga, chapter: { current, previous, next, list, groups } }
   } catch (error) {
     console.error('[漫画阅读器>再漫画适配器] 提取失败:', error)
     return null
@@ -703,7 +703,8 @@ async function extractFromManhuagui() {
     // 尝试从缓存或详情页获取章节列表
     const cacheKey = `manhuagui-${manga.id}`
     const cache = $cache.get(cacheKey)
-    const list = cache?.chapters || []
+    let groups = cache?.groups || []
+    let list = []
     let author = cache?.author || ''
     let description = cache?.description || ''
     let tags = cache?.tags || []
@@ -747,27 +748,35 @@ async function extractFromManhuagui() {
             .join('\n')
         }
 
-        // 提取章节列表
-        const chapters = Array.from(
+        // 提取章节组列表
+        const chapterGroups = Array.from(
           doc.querySelectorAll('.chapter .chapter-list')
-        )
-          .reverse()
-          .flatMap((cl) => Array.from(cl.querySelectorAll('ul')))
-          .flatMap((ul) => Array.from(ul.querySelectorAll('li a')).reverse())
-          .map((item) => {
-            const url = item.href
-            const pageCount =
-              parseInt(item.querySelector('i')?.innerText) || null
-            const idMatched = url.match(/\/comic\/\d+\/(\d+).html/)
-            return {
-              id: idMatched ? idMatched[1] : url,
-              name: item.title,
-              url,
-              pageCount
-            }
-          })
+        ).map((cl) => {
+          let title = '章节'
+          let prevEl = cl.previousElementSibling
+          if (prevEl.classList.contains('chapter-page')) {
+            prevEl = prevEl.previousElementSibling
+          }
+          if (prevEl.nodeName === 'H4') title = prevEl.innerText.trim()
 
-        list.push(...chapters)
+          const data = Array.from(cl.querySelectorAll('ul'))
+            .flatMap((ul) => Array.from(ul.querySelectorAll('li a')).reverse())
+            .map((item) => {
+              const url = item.href
+              const pageCount =
+                parseInt(item.querySelector('i')?.innerText) || null
+              const idMatched = url.match(/\/comic\/\d+\/(\d+).html/)
+              return {
+                id: idMatched ? idMatched[1] : url,
+                name: item.title,
+                url,
+                pageCount
+              }
+            })
+
+          return { title, data }
+        })
+        groups.push(...chapterGroups)
       } catch (error) {
         console.warn('[漫画阅读器>漫画柜适配器] 提取章节列表失败:', error)
       }
@@ -776,6 +785,7 @@ async function extractFromManhuagui() {
     if (author) manga.author = author
     if (description) manga.description = description
     if (tags.length) manga.tags = tags
+    if (groups.length) list = groups.flatMap((group) => group.data)
 
     if (list.length > 0) {
       const currentIndex = list.findIndex((ch) => ch.id === current.id)
@@ -783,11 +793,12 @@ async function extractFromManhuagui() {
       if (currentIndex < list.length - 1) next = list[currentIndex + 1]
 
       if (!cache) {
-        const cacheData = { author, description, tags, chapters: list }
+        const cacheData = { author, description, tags, groups }
         $cache.set(cacheKey, cacheData, 3600)
         console.log(`[漫画阅读器>漫画柜适配器] 保存缓存`, cacheData)
       }
     } else {
+      groups = [{ title: '章节', data: [current] }]
       list.push(current)
     }
 
@@ -798,7 +809,7 @@ async function extractFromManhuagui() {
       totalPages: current.images.length
     })
 
-    return { manga, chapter: { current, previous, next, list } }
+    return { manga, chapter: { current, previous, next, list, groups } }
   } catch (error) {
     console.error('[漫画阅读器>漫画柜适配器] 提取失败:', error)
     return null
@@ -852,6 +863,7 @@ function createVueApp() {
         current: null,
         previous: null,
         next: null,
+        groups: [],
         list: []
       })
 
@@ -933,6 +945,7 @@ function createVueApp() {
             chapter.previous = data.chapter.previous
           if (data.chapter.next !== undefined) chapter.next = data.chapter.next
           if (data.chapter.list) chapter.list = data.chapter.list
+          if (data.chapter.groups) chapter.groups = data.chapter.groups
         }
 
         if (visible) {
@@ -1312,13 +1325,18 @@ function createVueApp() {
             </div>
           </div>
 
-          <div class="vmr-chapter-list">
-            <div v-for="ch in chapter.list" :key="ch.id" class="vmr-chapter-item" :class="{ active: chapter.current?.id === ch.id }" :title="ch.name" @click="loadChapter(ch)">
-              <div v-if="ch.pageCount" class="vmr-chapter-pagecount">
-                {{ ch.pageCount }}P</div>
-              <div class="vmr-chapter-name">
-                {{ ch.name }}</div>
-              <div class="vmr-chapter-update-time" v-if="ch.updateTime">{{ ch.updateTime }}</div>
+          <div class="vmr-chapter-group-list">
+            <div v-for="group in chapter.groups" :key="group.title" class="vmr-chapter-group">
+              <div class="vmr-chapter-group-title">{{ group.title }}</div>
+              <div class="vmr-chapter-list">
+                <div v-for="ch in group.data" :key="ch.id" class="vmr-chapter-item" :class="{ active: chapter.current?.id === ch.id }" :title="ch.name" @click="loadChapter(ch)">
+                  <div v-if="ch.pageCount" class="vmr-chapter-pagecount">
+                    {{ ch.pageCount }}P</div>
+                  <div class="vmr-chapter-name">
+                    {{ ch.name }}</div>
+                  <div class="vmr-chapter-update-time" v-if="ch.updatedAt">{{ ch.updatedAt }}</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
