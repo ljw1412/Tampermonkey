@@ -6,7 +6,9 @@
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/*
 // @match        https://www.manhuagui.com/comic/*/*.html
+// @match        https://m.happymh.com/mangaread/*
 // @require      https://unpkg.com/vue@3/dist/vue.global.prod.js
+// @require      https://scriptcat.org/lib/637/1.4.5/ajaxHooker.js
 // @grant        unsafeWindow
 // @grant        GM_addStyle
 // @grant        GM_deleteValue
@@ -15,7 +17,7 @@
 // @grant        GM_listValues
 // ==/UserScript==
 
-/* global Vue */
+/* global Vue ajaxHooker */
 
 // ==================== 常量配置 ====================
 const CONFIG = {
@@ -832,6 +834,103 @@ const WEBSITE_ADAPTERS = [
     host: 'manhuagui.com',
     pathnameRegEx: /^\/comic\/\d+\/\d+.html/,
     extract: extractFromManhuagui
+  },
+  {
+    name: '嗨皮漫画',
+    host: 'm.happymh.com',
+    pathnameRegEx: /^\/mangaread\//,
+    requestHooker: {
+      filter: [
+        { url: '/apis/manga/reading' },
+        { url: '/apis/manga/chapterByPage' }
+      ],
+      hooker(request) {
+        const { url, data } = request
+        request.response = (res) => {
+          if (res.status !== 200) return
+          console.log('[漫画阅读器>requestHooker]', url, res)
+          try {
+            const json = JSON.parse(res.responseText || res.response)
+            const { status, data, msg = '请求错误' } = json
+            if (status !== 0) console.warn('[漫画阅读器>requestHooker]', msg)
+            console.log(status, data)
+            if (url.includes('/apis/manga/reading')) {
+              const manga = {
+                id: data.manga_id,
+                title: data.manga_name,
+                author: '',
+                cover: data.manga_cover,
+                status: data.isEn ? '已完结' : '连载中',
+                url: `/manga/${data.manga_code}`
+              }
+
+              const current = {
+                id: data.id,
+                name: data.chapter_name,
+                url: location.href,
+                images: data.scans.map((item) =>
+                  item.url.replace('q=50', 'q=99')
+                ),
+                pageCount: data.scans.length
+              }
+              const previous = data.pre_cid
+                ? {
+                    id: data.pre_cid,
+                    name: '上一章',
+                    url: `./${data.pre_cid}`
+                  }
+                : null
+              const next = data.next_cid
+                ? {
+                    id: data.next_cid,
+                    name: '下一章',
+                    url: `./${data.next_cid}`
+                  }
+                : null
+              const list = []
+              const groups = [{ title: '章节', data: list }]
+
+              setMangaData({
+                manga,
+                chapter: { current, previous, next, list, groups }
+              })
+            } else if (url.includes('/apis/manga/chapterByPage')) {
+              const readerChapter = getReaderChapter() || {}
+              const { items } = data
+              const list = [
+                ...items
+                  .map((item) => ({
+                    id: item.id,
+                    name: item.chapterName,
+                    url: `./${item.id}`,
+                    order: item.order
+                  }))
+                  .reverse(),
+                ...readerChapter.list
+              ]
+              const urlObj = new URL(res.finalUrl)
+              const cid = parseInt(urlObj.searchParams.get('cid'))
+              const currentIndex = list.findIndex((ch) => ch.id === cid)
+              let previous = currentIndex > 0 ? list[currentIndex - 1] : null
+              if (!previous && readerChapter.previous) {
+                previous = readerChapter.previous
+                if (~currentIndex) list.splice(currentIndex, 0, previous)
+              }
+              let next =
+                currentIndex < list.length - 1 ? list[currentIndex + 1] : null
+              if (!next && readerChapter.next) {
+                next = readerChapter.next
+                if (~currentIndex) list.splice(currentIndex + 1, 0, next)
+              }
+              const groups = [{ title: '章节', data: list }]
+              setMangaData({ chapter: { previous, next, list, groups } })
+            }
+          } catch (error) {
+            console.error('[漫画阅读器>requestHooker]', error)
+          }
+        }
+      }
+    }
   }
 ]
 
@@ -851,12 +950,15 @@ function getIcon(name, props = '') {
 }
 
 function createVueApp() {
-  const { createApp, ref, computed, reactive, watch } = Vue
+  const { createApp, ref, computed, reactive, watch, useTemplateRef } = Vue
 
   return createApp({
     setup() {
+      // DOM Ref
+      const readerContainerEl = useTemplateRef('readerContainerEl')
+
       // 漫画信息
-      const manga = ref(null)
+      const manga = ref({})
 
       // 章节信息
       const chapter = reactive({
@@ -945,7 +1047,10 @@ function createVueApp() {
             chapter.previous = data.chapter.previous
           if (data.chapter.next !== undefined) chapter.next = data.chapter.next
           if (data.chapter.list) chapter.list = data.chapter.list
-          if (data.chapter.groups) chapter.groups = data.chapter.groups
+          if (data.chapter.groups) {
+            chapter.groups = data.chapter.groups
+            scrollToActiveChapter()
+          }
         }
 
         if (visible) {
@@ -1106,6 +1211,17 @@ function createVueApp() {
         }, duration)
       }
 
+      // 侧边栏章节列表滚动到当前章节
+      const scrollToActiveChapter = () => {
+        setTimeout(() => {
+          const el = document.querySelector('.vmr-chapter-item.active')
+          if (el) {
+            el.scrollIntoView({ block: 'center' })
+            if (readerContainerEl.value) readerContainerEl.value.scrollTo(0, 0)
+          }
+        }, 0)
+      }
+
       // 键盘事件处理
       const handleKeydown = (event) => {
         if (!isReaderVisible.value) return
@@ -1164,14 +1280,7 @@ function createVueApp() {
 
       watch(isReaderVisible, (v) => {
         document.documentElement.classList.toggle('vmr-overflow-hidden', v)
-        if (v) {
-          setTimeout(() => {
-            // 章节列表滚到到当前章节
-            const el = document.querySelector('.vmr-chapter-item.active')
-            if (el)
-              el.scrollIntoView({ block: 'nearest', container: 'nearest' })
-          }, 0)
-        }
+        if (v) scrollToActiveChapter()
       })
 
       watch(totalPages, (newTotal) => {
@@ -1194,6 +1303,7 @@ function createVueApp() {
       }
 
       return {
+        readerContainerEl,
         manga,
         chapter,
         currentPageIndex,
@@ -1239,14 +1349,15 @@ function createVueApp() {
         showToast,
         showConfirmDialog,
         handleConfirm,
-        handleCancel
+        handleCancel,
+        scrollToActiveChapter
       }
     },
 
     template: `
       <div v-if="isEntryVisible && !isReaderVisible" class="vmr-open-btn" @click="openReader" title="打开阅读器">📖</div>
 
-      <div v-if="isReaderVisible" class="manga-reader-container" :data-theme="theme">
+      <div v-if="isReaderVisible" ref="readerContainerEl" class="manga-reader-container" :data-theme="theme">
         <div class="vmr-reader-close-btn" @click="closeReader" title="关闭">
           ${getIcon('close')}
         </div>
@@ -1410,6 +1521,16 @@ function createVueApp() {
 }
 
 // ==================== 全局API ====================
+function getReaderManga() {
+  if (!window.$vm) return console.error('[漫画阅读器] Vue应用未初始化')
+  return window.$vm.setupState.manga
+}
+
+function getReaderChapter() {
+  if (!window.$vm) return console.error('[漫画阅读器] Vue应用未初始化')
+  return window.$vm.setupState.chapter
+}
+
 function setEntryVisible(visible) {
   if (!window.$vm) return console.error('[漫画阅读器] Vue应用未初始化')
   window.$vm.setupState.isEntryVisible = visible
@@ -1436,6 +1557,8 @@ function exposeGlobalAPI() {
   const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
   win.$vmr = {
     $vm: window.$vm,
+    getReaderManga,
+    getReaderChapter,
     setMangaData,
     setEntryVisible,
     setReaderVisible
@@ -1470,6 +1593,9 @@ async function loadMangaData(website, skipCheck = false) {
   try {
     if (!skipCheck && !checkReadPage(website)) throw new Error('非阅读页！')
     console.log(`[漫画阅读器] 检测到${website.name}，开始提取数据...`)
+    if (typeof website.extract !== 'function') {
+      throw new Error('extract不是一个Function')
+    }
     const data = await website.extract()
     if (data) {
       setMangaData(data)
@@ -1506,12 +1632,26 @@ function startPathnameTimer(fn = () => {}, delay = 500) {
 }
 
 // ==================== 主程序入口 ====================
+const website = getWebsite()
+if (typeof website.requestHooker === 'function') {
+  website.requestHooker()
+  console.log('[漫画阅读器>请求劫持器] 开始劫持！')
+} else if (typeof website.requestHooker === 'object') {
+  const { filter, hooker } = website.requestHooker
+  if (!hooker) return console.warn('[漫画阅读器>请求劫持器] 未设置hooker')
+  if (typeof hooker !== 'function') {
+    return console.warn('[漫画阅读器>请求劫持器] hooker必须是一个Function')
+  }
+  if (Array.isArray(filter)) ajaxHooker.filter(filter)
+  ajaxHooker.hook(hooker.bind(website))
+  console.log('[漫画阅读器>请求劫持器] 开始劫持！')
+}
+
 ;(function () {
   'use strict'
   // 清理过期缓存
   $cache.clearExpired()
-  // 站点匹配
-  const website = getWebsite()
+  // 未匹配站点，跳过初始化
   if (!website) {
     console.log('[漫画阅读器] 未找到站点配置，不进行初始化')
     return
@@ -1535,13 +1675,16 @@ function startPathnameTimer(fn = () => {}, delay = 500) {
 
   function loadData() {
     const isReadPage = checkReadPage(website)
+    // 设置入口显隐
+    setEntryVisible(isReadPage)
+    // 劫持模式则跳过解析阶段
+    if (website.requestHooker) return isReadPage
     // 延迟加载数据
     if (isReadPage) {
       setTimeout(() => {
         loadMangaData(website, true)
       }, website.loadDelay || 0)
     }
-    setEntryVisible(isReadPage)
     return isReadPage
   }
 
