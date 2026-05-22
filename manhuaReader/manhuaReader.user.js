@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         漫画阅读器
 // @namespace    http://tampermonkey.net/
-// @version      2.1.1
+// @version      2.2.0
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/*
@@ -151,6 +151,7 @@ const STYLES = `
   --vmr-scrollbar-track: #f1f1f1;
   --vmr-scrollbar-thumb: #888;
   --vmr-scrollbar-thumb-hover: #555;
+  --vmr-slider-status-bg: rgba(0, 0, 0, 0.1);
 }
 
 /* 暗色主题 */
@@ -191,6 +192,7 @@ const STYLES = `
   --vmr-scrollbar-thumb: #555;
   --vmr-scrollbar-thumb-hover: #777;
   --vmr-slider-accent-color: #fff;
+  --vmr-slider-status-bg: rgba(255, 255, 255, 0.1);
 }
 
 .manga-reader-container {
@@ -357,11 +359,21 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 
 .vmr-progress-status { font-size: 14px; min-width: 64px; text-align: center; }
 .vmr-page-slider { position: relative; flex: 1 1 0%; }
+.vmr-slider-stataus-bar { 
+  position: absolute; top: 50%; left: 0; width: 100%; height: 16px; 
+  transform: translateY(-50%); background: var(--vmr-slider-status-bg);
+  border-radius: 9999px; overflow: hidden; z-index: -1;
+}
+.vmr-slider-status-progress { display: flex; width: 100%; height: 100%; }
+.vmr-slider-status-block { flex: 1 1 0; }
+.vmr-slider-status-block[data-status="-1"] {background: red;}
+.vmr-slider-status-block[data-status="0"] {background: gray;}
+.vmr-slider-status-block[data-status="1"] {background: green;}
+.vmr-slider-status-block[data-status="99"] {background: orange;}
 .vmr-page-slider input {
   width: 100%; cursor: pointer; height: 6px; accent-color: var(--vmr-slider-accent-color);
   background-color: rgba(255, 255, 255, 0.2); border-radius: 9999px;
 }
-
 .vmr-slider-tooltip {
   position: absolute; top: -46px; left: var(--slider-position, 0%);
   transform: translateX(-50%); padding: 6px 12px; background: var(--vmr-bg-overlay);
@@ -970,8 +982,7 @@ function createVueApp() {
       })
 
       // 页面状态
-      const currentPageIndex = ref(0)
-      const sliderValue = ref(1)
+      const pageIndex = ref(0)
 
       // UI状态
       const isEntryVisible = ref(false)
@@ -998,10 +1009,27 @@ function createVueApp() {
         callback: null
       })
 
+      // 导航进度条
+      const sliderValue = ref(pageIndex.value + 1)
+      const slider = computed(() => {
+        const min = 1
+        const max = totalPages.value || 1
+        const percentage = ((sliderValue.value - min) / (max - min)) * 100
+        const tooltipStyles = { '--slider-position': `${percentage}%` }
+        const gapWidth = max > 1 ? 100 / (max - 1) : 0
+        const statusBarStyles = {
+          transform: `scaleX(${(100 + gapWidth / 2) / 100}) translateY(-50%)`
+        }
+        return { min, max, statusBarStyles, tooltipStyles }
+      })
+      // 当前章节的图片加载状况
+      // -1: 加载失败  0/undefined: 未加载  1: 加载完成  99: 加载中
+      const imgStatusList = ref([])
+
       // 计算属性
       const totalPages = computed(() => chapter.current?.images?.length || 0)
       const currentImage = computed(
-        () => chapter.current?.images?.[currentPageIndex.value]
+        () => chapter.current?.images?.[pageIndex.value]
       )
 
       const preloadImages = computed(() => {
@@ -1010,18 +1038,16 @@ function createVueApp() {
         return Array.from({ length: offset * 2 }, (_, i) => {
           const idx =
             i < offset
-              ? currentPageIndex.value + i - offset
-              : currentPageIndex.value + i - offset + 1
-          return chapter.current.images[idx]
-        }).filter(Boolean)
+              ? pageIndex.value + i - offset
+              : pageIndex.value + i - offset + 1
+          return { url: chapter.current.images[idx], index: idx }
+        }).filter((item) => item.url)
       })
 
       const hasNextChapter = computed(() => !!chapter.next)
       const hasPrevChapter = computed(() => !!chapter.previous)
-      const isFirstPage = computed(() => currentPageIndex.value === 0)
-      const isLastPage = computed(
-        () => currentPageIndex.value >= totalPages.value - 1
-      )
+      const isFirstPage = computed(() => pageIndex.value === 0)
+      const isLastPage = computed(() => pageIndex.value >= totalPages.value - 1)
 
       const prevButtonTooltip = computed(() => {
         if (isFirstPage.value) return hasPrevChapter.value ? '上一章' : '到头了'
@@ -1041,7 +1067,7 @@ function createVueApp() {
         if (data.chapter) {
           if (data.chapter.current) {
             chapter.current = data.chapter.current
-            currentPageIndex.value = 0
+            pageIndex.value = 0
           }
           if (data.chapter.previous !== undefined)
             chapter.previous = data.chapter.previous
@@ -1093,15 +1119,14 @@ function createVueApp() {
       }
 
       const goToPage = (index) => {
-        if (index >= 0 && index < totalPages.value) {
-          currentPageIndex.value = index
-        }
+        index = Math.max(Math.min(index, totalPages.value - 1), 0)
+        pageIndex.value = index
       }
 
       const nextPage = () => {
         if (isUIVisible.value) isUIVisible.value = false
-        if (currentPageIndex.value < totalPages.value - 1) {
-          currentPageIndex.value++
+        if (pageIndex.value < totalPages.value - 1) {
+          pageIndex.value++
         } else {
           nextChapter()
         }
@@ -1109,8 +1134,8 @@ function createVueApp() {
 
       const prevPage = () => {
         if (isUIVisible.value) isUIVisible.value = false
-        if (currentPageIndex.value > 0) {
-          currentPageIndex.value--
+        if (pageIndex.value > 0) {
+          pageIndex.value--
         } else {
           prevChapter()
         }
@@ -1187,19 +1212,8 @@ function createVueApp() {
         nextPage()
       }
 
-      const handleSliderInput = (event) => {
-        const value = parseInt(event.target.value, 10)
-        const min = parseInt(event.target.min, 10)
-        const max = parseInt(event.target.max, 10)
-        const percentage = ((value - min) / (max - min)) * 100
-        event.target.parentElement.style.setProperty(
-          '--slider-position',
-          `${percentage}%`
-        )
-      }
-
       const handleSliderChange = (event) => {
-        goToPage(parseInt(event.target.value, 10) - 1)
+        goToPage(sliderValue.value - 1)
       }
 
       const showToast = (message, duration = CONFIG.TOAST_DURATION) => {
@@ -1273,41 +1287,27 @@ function createVueApp() {
       document.addEventListener('keydown', handleKeydown, true)
 
       // 监听器
-      watch(currentPageIndex, (newIndex) => {
-        sliderValue.value = newIndex + 1
-        updateSliderPosition(newIndex + 1)
-      })
-
       watch(isReaderVisible, (v) => {
         document.documentElement.classList.toggle('vmr-overflow-hidden', v)
         if (v) scrollToActiveChapter()
       })
 
-      watch(totalPages, (newTotal) => {
-        if (newTotal > 0) {
-          setTimeout(() => updateSliderPosition(currentPageIndex.value + 1), 0)
-        }
+      watch(pageIndex, (newIndex) => {
+        sliderValue.value = newIndex + 1
       })
 
-      const updateSliderPosition = (value) => {
-        const slider = document.querySelector('.vmr-page-slider input')
-        if (slider) {
-          const min = parseInt(slider.min, 10) || 1
-          const max = parseInt(slider.max, 10) || 1
-          const percentage = ((value - min) / (max - min)) * 100
-          slider.parentElement.style.setProperty(
-            '--slider-position',
-            `${percentage}%`
-          )
+      watch(
+        () => chapter.current?.images,
+        () => {
+          imgStatusList.value = []
         }
-      }
+      )
 
       return {
         readerContainerEl,
         manga,
         chapter,
-        currentPageIndex,
-        sliderValue,
+        pageIndex,
         isEntryVisible,
         isReaderVisible,
         isUIVisible,
@@ -1320,6 +1320,9 @@ function createVueApp() {
         confirmDialog,
         totalPages,
         currentImage,
+        sliderValue,
+        slider,
+        imgStatusList,
         preloadImages,
         hasNextChapter,
         hasPrevChapter,
@@ -1344,7 +1347,6 @@ function createVueApp() {
         handleLeftClick,
         handleCenterClick,
         handleRightClick,
-        handleSliderInput,
         handleSliderChange,
         showToast,
         showConfirmDialog,
@@ -1469,20 +1471,31 @@ function createVueApp() {
 
         <div class="vmr-navbar" :class="{ 'vmr-show': isUIVisible }">
           <div class="vmr-progress">
-            <div class="vmr-navbar-btn vmr-progress-perv" :class="{ disabled: currentPageIndex <= 0 && !hasPrevChapter, 'child-icon-rotate-90': currentPageIndex <= 0 }" @click="prevPage">
+            <div class="vmr-navbar-btn vmr-progress-perv" :class="{ disabled: pageIndex <= 0 && !hasPrevChapter, 'child-icon-rotate-90': pageIndex <= 0 }" @click="prevPage">
               ${getIcon('left')}
               <div class="vmr-button-tooltip">{{ prevButtonTooltip }}</div>
             </div>
-            <div class="vmr-progress-status">{{ currentPageIndex + 1 }} / {{ totalPages }}</div>
+
+            <div class="vmr-progress-status">{{ pageIndex + 1 }} / {{ totalPages }}</div>
+
             <div class="vmr-page-slider">
-              <input type="range" min="1" :max="totalPages" v-model.number="sliderValue" @input="handleSliderInput" @change="handleSliderChange"/>
-              <div class="vmr-slider-tooltip">{{ sliderValue }}</div>
+              <div class="vmr-slider-stataus-bar" :style="slider.statusBarStyles"> 
+                <div class="vmr-slider-status-progress">
+                  <div v-for="i of slider.max" class="vmr-slider-status-block" :data-page="i" :data-status="imgStatusList[i - 1]"></div>
+                </div>
+              </div>
+
+              <input type="range" :min="slider.min" :max="slider.max" v-model.number="sliderValue" @input="handleSliderInput" @change="handleSliderChange"/>
+
+              <div class="vmr-slider-tooltip" :style="slider.tooltipStyles">
+                {{ sliderValue }}
+              </div>
             </div>
             <div class="vmr-navbar-btn vmr-setting-btn" @click="toggleSettings">
               ${getIcon('settings')}
               <div class="vmr-button-tooltip">设置</div>
             </div>
-            <div class="vmr-navbar-btn vmr-progress-next" :class="{ disabled: currentPageIndex >= totalPages - 1 && !hasNextChapter, 'child-icon-rotate-90': currentPageIndex >= totalPages - 1 }" @click="nextPage">
+            <div class="vmr-navbar-btn vmr-progress-next" :class="{ disabled: pageIndex >= totalPages - 1 && !hasNextChapter, 'child-icon-rotate-90': pageIndex >= totalPages - 1 }" @click="nextPage">
               ${getIcon('right')}
               <div class="vmr-button-tooltip">{{ nextButtonTooltip }}</div>
             </div>
@@ -1490,7 +1503,7 @@ function createVueApp() {
         </div>
 
         <div class="vmr-pagination-status" :class="{ 'vmr-show': !isUIVisible }">
-          {{ currentPageIndex + 1 }} / {{ totalPages }}
+          {{ pageIndex + 1 }} / {{ totalPages }}
         </div>
 
         <div class="vmr-main-content">
@@ -1502,7 +1515,7 @@ function createVueApp() {
 
           <div class="vmr-image-container">
             <div v-if="currentImage" class="vmr-manga-page">
-              <img :src="currentImage" :alt="'第' + (currentPageIndex + 1) + '页'" />
+              <img :src="currentImage" :alt="'第' + (pageIndex + 1) + '页'" @load="imgStatusList[pageIndex] = 1" @error="imgStatusList[pageIndex] = -1"/>
             </div>
 
             <div v-else class="vmr-empty-state">
@@ -1511,7 +1524,7 @@ function createVueApp() {
             </div>
             
             <div class="vmr-manga-preload">
-              <img v-for="imgUrl of preloadImages" :src="imgUrl" alt="预加载" />
+              <img v-for="item of preloadImages" :src="item.url" alt="预加载" @load="imgStatusList[item.index] = 1" @error="imgStatusList[item.index] = -1"/>
             </div>
           </div>
         </div>
