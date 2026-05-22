@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         漫画阅读器
 // @namespace    http://tampermonkey.net/
-// @version      2.2.0
+// @version      2.3.0
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/*
@@ -26,8 +26,12 @@ const CONFIG = {
   THEME_KEY: 'vmr-theme',
   DEFAULT_THEME: 'light',
   AUTO_HIDE_DELAY: 1000,
+  PRELOAD_COUNT_KEY: 'vmr-preload-count',
   PRELOAD_OFFSET: 2,
-  TOAST_DURATION: 2000
+  TOAST_DURATION: 2000,
+  STATUS_BAR_MODE_KEY: 'vmr-status-bar-mode',
+  STATUS_BAR_MODE: 'none' // 'none' | 'slider' | 'bottom' | 'both'
+  // TODO 是否在切换上下页时隐藏UI
 }
 
 // ==================== 工具类 ====================
@@ -436,6 +440,14 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 .vmr-manga-page img {
   width: auto; max-width: 100%; height: 100%; display: block; object-fit: contain;
 }
+.vmr-bottom-status-bar { flex-shrink: 0; display: flex; height: 8px; 
+  font-size: 12px; text-align: center; color: var(--vmr-text-muted);
+  background: var(--vmr-slider-status-bg);
+}
+.vmr-bottom-status-bar .vmr-slider-status-block {
+  border: 1px solid var(--vmr-border-color);
+}
+
 
 .vmr-empty-state {
   flex: 1; display: flex; flex-direction: column;
@@ -997,7 +1009,11 @@ function createVueApp() {
 
       // 预载数量
       const preloadCount = ref(
-        GM_getValue('vmr-preload-count', CONFIG.PRELOAD_OFFSET)
+        GM_getValue(CONFIG.PRELOAD_COUNT_KEY, CONFIG.PRELOAD_OFFSET)
+      )
+
+      const statusBarMode = ref(
+        GM_getValue(CONFIG.STATUS_BAR_MODE_KEY, CONFIG.STATUS_BAR_MODE)
       )
 
       // Toast和对话框
@@ -1181,7 +1197,11 @@ function createVueApp() {
       }
 
       const handlePreloadCountChange = () => {
-        GM_setValue('vmr-preload-count', preloadCount.value)
+        GM_setValue(CONFIG.PRELOAD_COUNT_KEY, preloadCount.value)
+      }
+
+      const handleStatusBarModeChange = () => {
+        GM_setValue(CONFIG.STATUS_BAR_MODE_KEY, statusBarMode.value)
       }
 
       const toggleSettings = () => {
@@ -1316,6 +1336,7 @@ function createVueApp() {
         isSettingsVisible,
         theme,
         preloadCount,
+        statusBarMode,
         toast,
         confirmDialog,
         totalPages,
@@ -1340,6 +1361,7 @@ function createVueApp() {
         toggleTheme,
         handleThemeChange,
         handlePreloadCountChange,
+        handleStatusBarModeChange,
         toggleSettings,
         closeSettings,
         closeReader,
@@ -1406,6 +1428,15 @@ function createVueApp() {
                   </label>
                 </div>
                 <div class="vmr-setting-hint">{{ preloadCount === 0 ? '当前页前后不进行预载' : '当前页前后各预载' + preloadCount + '页' }}</div>
+              </div>
+              <div class="vmr-setting-item"> 
+                <label class="vmr-setting-label">预载状况</label>
+                <div class="vmr-setting-options"> 
+                  <label v-for="(v,k) of { none: '不显示', slider: '导航条', bottom: '底部条', both: '都显示' }" class="vmr-radio">
+                    <input type="radio" name="statusBarMode" :value="k" v-model="statusBarMode" @change="handleStatusBarModeChange"/>
+                    <span class="vmr-radio-label">{{ v }}</span>
+                  </label>
+                </div>
               </div>
             </div>
           </div>
@@ -1479,7 +1510,7 @@ function createVueApp() {
             <div class="vmr-progress-status">{{ pageIndex + 1 }} / {{ totalPages }}</div>
 
             <div class="vmr-page-slider">
-              <div class="vmr-slider-stataus-bar" :style="slider.statusBarStyles"> 
+              <div  v-if="['slider', 'both'].includes(statusBarMode)"  class="vmr-slider-stataus-bar" :style="slider.statusBarStyles"> 
                 <div class="vmr-slider-status-progress">
                   <div v-for="i of slider.max" class="vmr-slider-status-block" :data-page="i" :data-status="imgStatusList[i - 1]"></div>
                 </div>
@@ -1525,6 +1556,12 @@ function createVueApp() {
             
             <div class="vmr-manga-preload">
               <img v-for="item of preloadImages" :src="item.url" alt="预加载" @load="imgStatusList[item.index] = 1" @error="imgStatusList[item.index] = -1"/>
+            </div>
+          </div>
+
+          <div v-if="['bottom', 'both'].includes(statusBarMode)" class="vmr-bottom-status-bar">
+            <div v-for="i of slider.max" class="vmr-slider-status-block" :data-page="i" :data-status="imgStatusList[i - 1]">
+              <span v-if="i - 1 === pageIndex">▲</span>
             </div>
           </div>
         </div>
