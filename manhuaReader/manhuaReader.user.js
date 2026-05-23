@@ -68,6 +68,12 @@ class CacheManager {
     GM_deleteValue(this.prefix + key)
   }
 
+  list() {
+    return GM_listValues().reduce((obj, key) => {
+      obj[key] = GM_getValue(key, null)
+      return obj
+    }, {})
+  }
   clearExpired() {
     const now = Date.now()
     let count = 0
@@ -228,8 +234,8 @@ a.vmr-manga-title:hover { text-decoration: underline; }
   display: flex; align-items: center; flex-wrap: wrap;
   margin-top: 4px; padding: 0 18px; opacity: 0.9; }
 .vmr-manga-status-and-tags > * {
-  flex-shrink: 0; display: inline-block; box-sizing: content-box; 
-  margin-top: 4px; padding: 4px; height: 10px; font-size: 10px; 
+  flex-shrink: 0; display: inline-block; box-sizing: content-box;
+  margin-top: 4px; padding: 4px; height: 10px; font-size: 10px;
   border: 1px solid currentColor; border-radius: 4px; }
 .vmr-manga-status-and-tags > *:not(:last-child) { margin-right: 4px; }
 
@@ -263,7 +269,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 .vmr-chapter-group-title { margin-bottom: 10px; text-align: center; color: var(--vmr-text-primary); font-size: 16px; font-weight: bold; }
 .vmr-chapter-list {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-  column-gap: 6px; row-gap: 6px; color: var(--vmr-text-primary); 
+  column-gap: 6px; row-gap: 6px; color: var(--vmr-text-primary);
 }
 .vmr-chapter-item {
   position: relative; padding: 16px 12px; border-radius: 6px; cursor: pointer;
@@ -363,8 +369,8 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 
 .vmr-progress-status { font-size: 14px; min-width: 64px; text-align: center; }
 .vmr-page-slider { position: relative; flex: 1 1 0%; }
-.vmr-slider-stataus-bar { 
-  position: absolute; top: 50%; left: 0; width: 100%; height: 16px; 
+.vmr-slider-stataus-bar {
+  position: absolute; top: 50%; left: 0; width: 100%; height: 16px;
   transform: translateY(-50%); background: var(--vmr-slider-status-bg);
   border-radius: 9999px; overflow: hidden; z-index: -1;
 }
@@ -440,7 +446,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 .vmr-manga-page img {
   width: auto; max-width: 100%; height: 100%; display: block; object-fit: contain;
 }
-.vmr-bottom-status-bar { flex-shrink: 0; display: flex; height: 8px; 
+.vmr-bottom-status-bar { flex-shrink: 0; display: flex; height: 8px;
   font-size: 12px; text-align: center; color: var(--vmr-text-muted);
   background: var(--vmr-slider-status-bg);
 }
@@ -560,7 +566,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 }
 .vmr-setting-hint {
   grid-column: 2; font-size: 12px; line-height: 16px;
-  color: var(--vmr-text-muted); padding-left: 0; 
+  color: var(--vmr-text-muted); padding-left: 0;
 }
 
 .vmr-reader-close-btn {
@@ -728,6 +734,7 @@ async function extractFromManhuagui() {
 
     // 尝试从缓存或详情页获取章节列表
     const cacheKey = `manhuagui-${manga.id}`
+    window.cacheKey = cacheKey
     const cache = $cache.get(cacheKey)
     let groups = cache?.groups || []
     let list = []
@@ -740,10 +747,28 @@ async function extractFromManhuagui() {
     } else {
       try {
         console.log('[漫画阅读器>漫画柜适配器] 从详情页提取章节列表')
-        const resp = await fetch(manga.url)
+        const resp = await fetch(manga.url, { credentials: 'same-origin' })
         const html = await resp.text()
         const doc = new DOMParser().parseFromString(html, 'text/html')
-
+        console.log('[漫画阅读器>漫画柜适配器] 详情页的文档', doc)
+        const hiddenViewStateEl = doc.querySelector('#__VIEWSTATE')
+        if (hiddenViewStateEl) {
+          const viewState = hiddenViewStateEl.value
+          console.groupCollapsed('[漫画阅读器>漫画柜适配器] 发现章节被隐藏')
+          console.log('加密的隐藏章节数据', viewState)
+          if (viewState) {
+            const chHTML = unsafeWindow.LZString.decompressFromBase64(viewState)
+            console.log('隐藏章节解析结果', chHTML)
+            const replacedEl = doc.querySelector('#erroraudit_show')
+            replacedEl.outerHTML = chHTML
+            hiddenViewStateEl.remove()
+            console.groupEnd()
+            console.log('[漫画阅读器>漫画柜适配器] 成功将章节插入指定位置')
+          } else {
+            console.groupEnd()
+            console.error('[漫画阅读器>漫画柜适配器] 未找到隐藏章节的解密信息')
+          }
+        }
         // 提取作者
         const authorEl = Array.from(
           doc.querySelectorAll('.book-detail .detail-list li span strong')
@@ -1429,9 +1454,9 @@ function createVueApp() {
                 </div>
                 <div class="vmr-setting-hint">{{ preloadCount === 0 ? '当前页前后不进行预载' : '当前页前后各预载' + preloadCount + '页' }}</div>
               </div>
-              <div class="vmr-setting-item"> 
+              <div class="vmr-setting-item">
                 <label class="vmr-setting-label">预载状况</label>
-                <div class="vmr-setting-options"> 
+                <div class="vmr-setting-options">
                   <label v-for="(v,k) of { none: '不显示', slider: '导航条', bottom: '底部条', both: '都显示' }" class="vmr-radio">
                     <input type="radio" name="statusBarMode" :value="k" v-model="statusBarMode" @change="handleStatusBarModeChange"/>
                     <span class="vmr-radio-label">{{ v }}</span>
@@ -1510,7 +1535,7 @@ function createVueApp() {
             <div class="vmr-progress-status">{{ pageIndex + 1 }} / {{ totalPages }}</div>
 
             <div class="vmr-page-slider">
-              <div  v-if="['slider', 'both'].includes(statusBarMode)"  class="vmr-slider-stataus-bar" :style="slider.statusBarStyles"> 
+              <div  v-if="['slider', 'both'].includes(statusBarMode)"  class="vmr-slider-stataus-bar" :style="slider.statusBarStyles">
                 <div class="vmr-slider-status-progress">
                   <div v-for="i of slider.max" class="vmr-slider-status-block" :data-page="i" :data-status="imgStatusList[i - 1]"></div>
                 </div>
@@ -1553,7 +1578,7 @@ function createVueApp() {
               <div class="vmr-empty-state-icon">📖</div>
               <div class="vmr-empty-state-text">暂无内容，请使用 $vmr.setMangaData 加载漫画数据</div>
             </div>
-            
+
             <div class="vmr-manga-preload">
               <img v-for="item of preloadImages" :src="item.url" alt="预加载" @load="imgStatusList[item.index] = 1" @error="imgStatusList[item.index] = -1"/>
             </div>
@@ -1603,17 +1628,26 @@ function setMangaData(data) {
   console.log('[漫画阅读器] 数据已设置')
 }
 
+function clearCurrentCache() {
+  if (!window.cacheKey)
+    return console.error('[漫画阅读器] 删除缓存失败: 未设置缓存KEY')
+  $cache.delete(window.cacheKey)
+  console.log(`[漫画阅读器] 已删除当前章节对应漫画的缓存<${window.cacheKey}>`)
+}
+
 function exposeGlobalAPI() {
   const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
   win.$vmr = {
     $vm: window.$vm,
+    $cache,
     getReaderManga,
     getReaderChapter,
     setMangaData,
     setEntryVisible,
-    setReaderVisible
+    setReaderVisible,
+    clearCurrentCache
   }
-  console.log('[漫画阅读器] 全局API已暴露: $vmr', $vmr)
+  console.log('[漫画阅读器] 全局API已暴露: $vmr', win.$vmr)
 }
 
 // ==================== 数据加载器 ====================
