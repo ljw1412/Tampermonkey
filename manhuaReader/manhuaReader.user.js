@@ -30,7 +30,9 @@ const CONFIG = {
   PRELOAD_OFFSET: 2,
   TOAST_DURATION: 2000,
   STATUS_BAR_MODE_KEY: 'vmr-status-bar-mode',
-  STATUS_BAR_MODE: 'none' // 'none' | 'slider' | 'bottom' | 'both'
+  STATUS_BAR_MODE: 'none', // 'none' | 'slider' | 'bottom' | 'both'
+  PAGINATION_BAR_MODE_KEY: 'vmr-pagination-bar-mode',
+  PAGINATION_BAR_MODE: 'block' // 'block' | 'fixed'
   // TODO 是否在切换上下页时隐藏UI
 }
 
@@ -162,6 +164,8 @@ const STYLES = `
   --vmr-scrollbar-thumb: #888;
   --vmr-scrollbar-thumb-hover: #555;
   --vmr-slider-status-bg: rgba(0, 0, 0, 0.1);
+  --vmr-pagination-bar-height: 12px;
+  --vmr-pagination-bar-gap-color: rgba(0, 0, 0, 0.3);
 }
 
 /* 暗色主题 */
@@ -203,6 +207,7 @@ const STYLES = `
   --vmr-scrollbar-thumb-hover: #777;
   --vmr-slider-accent-color: #fff;
   --vmr-slider-status-bg: rgba(255, 255, 255, 0.1);
+  --vmr-pagination-bar-gap-color: rgba(255, 255, 255, 0.3);
 }
 
 .manga-reader-container {
@@ -325,7 +330,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 .vmr-navbar {
   position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
   width: 90%; max-width: 680px; user-select: none; z-index: 990; pointer-events: none;
-  }
+}
 .vmr-navbar.vmr-show { pointer-events: auto; }
 .vmr-progress {
   display: flex; align-items: center; gap: 12px; width: 100%; height: 44px;
@@ -376,10 +381,10 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 }
 .vmr-slider-status-progress { display: flex; width: 100%; height: 100%; }
 .vmr-slider-status-block { flex: 1 1 0; }
-.vmr-slider-status-block[data-status="-1"] {background: red;}
-.vmr-slider-status-block[data-status="0"] {background: gray;}
-.vmr-slider-status-block[data-status="1"] {background: green;}
-.vmr-slider-status-block[data-status="99"] {background: orange;}
+.vmr-slider-status-block[data-status="-1"] { background: #f53f3f; }
+.vmr-slider-status-block[data-status="0"] { background: #86909c; }
+.vmr-slider-status-block[data-status="1"] { background: #00b42a; }
+.vmr-slider-status-block[data-status="99"] { background: #ff7d00; }
 .vmr-page-slider input {
   width: 100%; cursor: pointer; height: 6px; accent-color: var(--vmr-slider-accent-color);
   background-color: rgba(255, 255, 255, 0.2); border-radius: 9999px;
@@ -408,7 +413,10 @@ a.vmr-manga-title:hover { text-decoration: underline; }
   background: var(--vmr-bg-overlay); backdrop-filter: blur(4px);
   border: 1px solid var(--vmr-button-border); border-radius: 24px;
   user-select: none; white-space: nowrap;
-  transform: translate(100%, 100%); transition: all 0.3s ease-in-out; opacity: 0; z-index: 980;
+  transform: translate(100%, 100%); transition: all 0.3s ease-in-out; opacity: 0; z-index: 980; pointer-events: none;
+}
+.vmr-pagination-status.has-pagination-bar {
+  bottom: calc( 4px + var(--vmr-pagination-bar-height));
 }
 .vmr-pagination-status.vmr-show { transform: translate(0, 0); opacity: 1; }
 
@@ -446,14 +454,39 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 .vmr-manga-page img {
   width: auto; max-width: 100%; height: 100%; display: block; object-fit: contain;
 }
-.vmr-bottom-status-bar { flex-shrink: 0; display: flex; height: 8px;
-  font-size: 12px; text-align: center; color: var(--vmr-text-muted);
-  background: var(--vmr-slider-status-bg);
+.vmr-pagination-bar {
+  flex-shrink: 0; display: flex; height: 0; z-index: 5;
+  font-size: 12px; text-align: center; color: #ffffff;
+  background: var(--vmr-slider-status-bg); opacity: 0;
+  transform: translateY(100%); transition: all 0.3s ease-in-out; 
 }
-.vmr-bottom-status-bar .vmr-slider-status-block {
-  border: 1px solid var(--vmr-border-color);
+.vmr-pagination-bar.vmr-show { transform: translateY(0); opacity: 1;
+  height: var(--vmr-pagination-bar-height); }
+.vmr-pagination-bar.vmr-fixed {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 985;
 }
-
+.vmr-pagination-bar .vmr-slider-status-block {
+  position: relative; cursor: pointer;
+}
+.vmr-pagination-bar .vmr-slider-status-block:hover::before {
+  content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  z-index: 10; background: rgba(0, 0, 0, 0.2);
+}
+.vmr-pagination-bar .vmr-slider-status-block:hover .vmr-button-tooltip {
+  opacity: 1; visibility: visible; transform: translateX(-50%) translateY(-4px);
+  pointer-events: none;
+}
+.vmr-pagination-bar .vmr-slider-status-block:not(:last-child) {
+  border-right: 1px solid var(--vmr-pagination-bar-gap-color);
+}
+.vmr-pagination-bar .vmr-slider-status-block[data-status="-1"] {
+  background: rgba(245, 63, 63, 0.5); }
+.vmr-pagination-bar .vmr-slider-status-block[data-status="0"] {
+  background: rgba(134, 144, 156, 0.5); }
+.vmr-pagination-bar .vmr-slider-status-block[data-status="1"] {
+  background: rgba(0, 180, 42, 0.5); }
+.vmr-pagination-bar .vmr-slider-status-block[data-status="99"] {
+  background: rgba(255, 125, 0, 0.5); }
 
 .vmr-empty-state {
   flex: 1; display: flex; flex-direction: column;
@@ -1037,8 +1070,14 @@ function createVueApp() {
         GM_getValue(CONFIG.PRELOAD_COUNT_KEY, CONFIG.PRELOAD_OFFSET)
       )
 
+      // 加载状态栏模式
       const statusBarMode = ref(
         GM_getValue(CONFIG.STATUS_BAR_MODE_KEY, CONFIG.STATUS_BAR_MODE)
+      )
+
+      // 分页条显示的模式
+      const paginationBarMode = ref(
+        GM_getValue(CONFIG.PAGINATION_BAR_MODE_KEY, CONFIG.PAGINATION_BAR_MODE)
       )
 
       // Toast和对话框
@@ -1229,6 +1268,10 @@ function createVueApp() {
         GM_setValue(CONFIG.STATUS_BAR_MODE_KEY, statusBarMode.value)
       }
 
+      const handlePaginationBarModeChange = () => {
+        GM_setValue(CONFIG.PAGINATION_BAR_MODE_KEY, paginationBarMode.value)
+      }
+
       const toggleSettings = () => {
         isSettingsVisible.value = !isSettingsVisible.value
       }
@@ -1296,7 +1339,7 @@ function createVueApp() {
         event.preventDefault()
         event.stopPropagation()
         event.stopImmediatePropagation()
-        console.log(event)
+        // console.log(event)
 
         switch (event.key) {
           case 'ArrowUp':
@@ -1362,6 +1405,7 @@ function createVueApp() {
         theme,
         preloadCount,
         statusBarMode,
+        paginationBarMode,
         toast,
         confirmDialog,
         totalPages,
@@ -1387,6 +1431,7 @@ function createVueApp() {
         handleThemeChange,
         handlePreloadCountChange,
         handleStatusBarModeChange,
+        handlePaginationBarModeChange,
         toggleSettings,
         closeSettings,
         closeReader,
@@ -1459,6 +1504,15 @@ function createVueApp() {
                 <div class="vmr-setting-options">
                   <label v-for="(v,k) of { none: '不显示', slider: '导航条', bottom: '底部条', both: '都显示' }" class="vmr-radio">
                     <input type="radio" name="statusBarMode" :value="k" v-model="statusBarMode" @change="handleStatusBarModeChange"/>
+                    <span class="vmr-radio-label">{{ v }}</span>
+                  </label>
+                </div>
+              </div>
+              <div v-if="['bottom', 'both'].includes(statusBarMode)" class="vmr-setting-item">
+                <label class="vmr-setting-label">分页底条</label>
+                <div class="vmr-setting-options"> 
+                  <label v-for="(v,k) of { 'block': '占位', 'fixed': '悬浮' }" class="vmr-radio">
+                    <input type="radio" name="paginationBarMode" :value="k" v-model="paginationBarMode" @change="handlePaginationBarModeChange"/>
                     <span class="vmr-radio-label">{{ v }}</span>
                   </label>
                 </div>
@@ -1558,7 +1612,10 @@ function createVueApp() {
           </div>
         </div>
 
-        <div class="vmr-pagination-status" :class="{ 'vmr-show': !isUIVisible }">
+        <div class="vmr-pagination-status" :class="{ 
+          'vmr-show': !isUIVisible,
+          'has-pagination-bar': ['bottom', 'both'].includes(statusBarMode)
+        }">
           {{ pageIndex + 1 }} / {{ totalPages }}
         </div>
 
@@ -1584,9 +1641,13 @@ function createVueApp() {
             </div>
           </div>
 
-          <div v-if="['bottom', 'both'].includes(statusBarMode)" class="vmr-bottom-status-bar">
-            <div v-for="i of slider.max" class="vmr-slider-status-block" :data-page="i" :data-status="imgStatusList[i - 1]">
-              <span v-if="i - 1 === pageIndex">▲</span>
+          <div v-if="['bottom', 'both'].includes(statusBarMode)" class="vmr-pagination-bar" :class="{
+            'vmr-show': !isUIVisible,
+            'vmr-fixed': paginationBarMode === 'fixed' 
+          }">
+            <div v-for="i of slider.max" class="vmr-slider-status-block" :data-page="i" :data-status="imgStatusList[i - 1]" @click="goToPage(i - 1)">
+              <span v-if="i - 1 === pageIndex">▼</span>
+              <div class="vmr-button-tooltip">{{ i }}</div>
             </div>
           </div>
         </div>
