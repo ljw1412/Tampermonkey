@@ -46,7 +46,7 @@ class CacheManager {
     this.prefix = prefix
   }
 
-  set(key, data, ttlSeconds) {
+  set(key, data, ttlSeconds = 600) {
     const cacheKey = this.prefix + key
     GM_setValue(cacheKey, {
       data,
@@ -163,6 +163,8 @@ const STYLES = `
   --vmr-scrollbar-track: #f1f1f1;
   --vmr-scrollbar-thumb: #888;
   --vmr-scrollbar-thumb-hover: #555;
+
+  --vmr-toolbar-height: 64px;
   --vmr-slider-status-bg: rgba(0, 0, 0, 0.1);
   --vmr-pagination-bar-height: 12px;
   --vmr-pagination-bar-gap-color: rgba(0, 0, 0, 0.3);
@@ -205,6 +207,7 @@ const STYLES = `
   --vmr-scrollbar-track: #2d2d2d;
   --vmr-scrollbar-thumb: #555;
   --vmr-scrollbar-thumb-hover: #777;
+
   --vmr-slider-accent-color: #fff;
   --vmr-slider-status-bg: rgba(255, 255, 255, 0.1);
   --vmr-pagination-bar-gap-color: rgba(255, 255, 255, 0.3);
@@ -300,9 +303,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 .vmr-chapter-item.active .vmr-chapter-update-time { color: rgba(255,255,255,0.8); }
 
 .vmr-toolbar {
-  position: absolute; top: 0; left: 0; height: 64px; padding-left: 20px;
-  display: flex; justify-content: space-between; align-items: center;
-  z-index: 999; transform: translateY(-100%); transition: all 0.3s ease-in-out; opacity: 0;
+  position: absolute; top: 0; left: 0; height: var(--vmr-toolbar-height); display: flex; justify-content: space-between; align-items: center; padding-left: 20px; z-index: 999; transform: translateY(-100%); transition: all 0.3s ease-in-out; opacity: 0;
 }
 .vmr-toolbar.vmr-show { transform: translateY(0); opacity: 1; }
 .vmr-toolbar.has-sidebar { padding-left: 375px; }
@@ -447,26 +448,39 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 }
 .vmr-manga-preload img { width: 0; height: 0; }
 .vmr-manga-page {
-  height: 100%; max-width: 100%; margin: 0 auto;
-  background: var(--vmr-bg-secondary); overflow: hidden;
+  height: 100%; max-width: 100%; margin: 0 auto; overflow: hidden;
+  background: var(--vmr-bg-secondary); box-shadow: var(--vmr-shadow);
 }
 .vmr-manga-page img {
   width: auto; max-width: 100%; height: 100%; display: block; object-fit: contain;
 }
 
 .vmr-chapter-comments {
-  height: 100%; width: 100%; max-width: 680px; margin: 0 auto;
-  padding: 16px; background: var(--vmr-bg-secondary);
+  height: 100%; width: 100%; max-width: 680px; margin: 0 auto; padding: 16px;
+  background: var(--vmr-bg-secondary); box-shadow: var(--vmr-shadow);
+  transition: all 0.3s ease-in-out;
 }
-.vmr-chapter-comments-title {}
-.vmr-chapter-comments-list {}
-.vmr-chapter-comment {}
+.vmr-chapter-comments.vmr-safe-ui {
+  padding-top: calc(16px + var(--vmr-toolbar-height));
+}
+.vmr-chapter-comments-title {
+  font-size: 24px; color: var(--vmr-text-primary); font-weight: bold;
+}
+.vmr-chapter-comments-title > span { font-size: 16px; }
+.vmr-chapter-comments-list {
+  display: flex; flex-wrap: wrap; margin-top: 8px; color: var(--vmr-text-secondary);
+}
+.vmr-chapter-comment, .vmr-chapter-comment > * { font-size: 16px; }
+.vmr-chapter-comment {
+  padding: 6px 10px; margin: 0 6px 6px 0;
+  border: 1px solid var(--vmr-border-color); border-radius: 9999px;
+}
 
 .vmr-pagination-bar {
   flex-shrink: 0; display: flex; height: 0; z-index: 5;
   font-size: 12px; text-align: center; color: #ffffff;
   background: var(--vmr-slider-status-bg); opacity: 0;
-  transform: translateY(100%); transition: all 0.3s ease-in-out;
+  transform: translateY(100%); transition: all 0.3s ease-in-out; 
 }
 .vmr-pagination-bar.vmr-show { transform: translateY(0); opacity: 1;
   height: var(--vmr-pagination-bar-height); }
@@ -481,12 +495,14 @@ a.vmr-manga-title:hover { text-decoration: underline; }
   z-index: 10; background: rgba(0, 0, 0, 0.2);
 }
 .vmr-pagination-bar .vmr-slider-status-block:hover .vmr-button-tooltip {
-  opacity: 1; visibility: visible; transform: translateX(-50%) translateY(-4px);
+  opacity: 1; visibility: visible; transform: translateX(-50%);
   pointer-events: none;
 }
 .vmr-pagination-bar .vmr-slider-status-block:not(:last-child) {
   border-right: 1px solid var(--vmr-pagination-bar-gap-color);
 }
+.vmr-pagination-bar .vmr-slider-status-block.is-comment{
+  background: rgba(22, 93, 255, 0.5); }
 .vmr-pagination-bar .vmr-slider-status-block[data-status="-1"] {
   background: rgba(245, 63, 63, 0.5); }
 .vmr-pagination-bar .vmr-slider-status-block[data-status="0"] {
@@ -637,7 +653,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 /**
  * 从再漫画网站提取数据
  */
-function extractFromZaimanhua() {
+async function extractFromZaimanhua() {
   try {
     const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
     if (!win.__NUXT__?.data) {
@@ -711,6 +727,43 @@ function extractFromZaimanhua() {
   }
 }
 
+/**
+ * 从再漫画加载章节评论
+ */
+async function loadCommentsFromZaimanhua(data) {
+  try {
+    const { manga, chapter } = data
+    const mangaId = manga.id
+    const chapterId = chapter.current.id
+    if (!mangaId || !chapterId) {
+      console.error('[漫画阅读器>再漫画适配器] 缺少必要数据mangaId或chapterId')
+      return null
+    }
+    const cacheKey = `zaimanhua-${mangaId}-${chapterId}-comments`
+    const cache = $cache.get(cacheKey)
+    if (cache) {
+      console.log(`[漫画阅读器>再漫画适配器] 使用评论缓存<${cacheKey}>`)
+      return cache
+    }
+    const url = `https://v4api.zaimanhua.com/app/v1/viewpoint/list?type=0&comicId=${mangaId}&chapterId=${chapterId}&page=0&channel=pc`
+    const resp = await fetch(url)
+    const json = await resp.json()
+    console.log('[漫画阅读器>再漫画适配器] 获取评论数据:', json)
+    const { list, total } = json.data
+    const comments = list
+      .map((item) => {
+        if (!Array.isArray(item)) return null
+        const [chId, , , , , like, uid, content] = item
+        return { uid, like, content }
+      })
+      .filter(Boolean)
+    $cache.set(cacheKey, comments, 3600)
+    console.log(`[漫画阅读器>漫画柜适配器] 缓存评论<${cacheKey}>`, comments)
+    return comments
+  } catch (error) {
+    console.error('[漫画阅读器>再漫画适配器] 评论加载失败:', error)
+  }
+}
 /**
  * 从漫画柜网站提取数据
  */
@@ -888,7 +941,7 @@ async function extractFromManhuagui() {
       if (!cache) {
         const cacheData = { author, description, tags, groups }
         $cache.set(cacheKey, cacheData, 3600)
-        console.log(`[漫画阅读器>漫画柜适配器] 保存缓存`, cacheData)
+        console.log(`[漫画阅读器>漫画柜适配器] 缓存<${cacheKey}>`, cacheData)
       }
     } else {
       groups = [{ title: '章节', data: [current] }]
@@ -918,7 +971,8 @@ const WEBSITE_ADAPTERS = [
     pathnameRegEx: /^\/view\//,
     pathnamePollingDelay: 500,
     loadDelay: 1000,
-    extract: extractFromZaimanhua
+    extract: extractFromZaimanhua,
+    loadComments: loadCommentsFromZaimanhua
   },
   {
     name: '漫画柜',
@@ -1122,13 +1176,6 @@ function createVueApp() {
       const comments = computed(() => chapter.current?.comments || [])
       const currentPage = computed(() => pageIndex.value + 1)
       const totalPages = computed(() => chapter.current?.images?.length || 0)
-      const isCommentPage = computed(
-        () => hasComments.value && pageIndex.value === totalPages.value
-      )
-      const pageStatusText = computed(() => {
-        if (isCommentPage.value) return '评论'
-        return `${currentPage.value} / ${totalPages.value}`
-      })
       const currentImage = computed(
         () => chapter.current?.images?.[pageIndex.value]
       )
@@ -1151,6 +1198,14 @@ function createVueApp() {
       const isLastPage = computed(
         () => pageIndex.value >= totalPages.value - (hasComments.value ? 0 : 1)
       )
+      const isCommentPage = computed(
+        () => hasComments.value && pageIndex.value === totalPages.value
+      )
+
+      const pageStatusText = computed(() => {
+        if (isCommentPage.value) return '评论'
+        return `${currentPage.value} / ${totalPages.value}`
+      })
 
       const prevButtonTooltip = computed(() => {
         if (isFirstPage.value) return hasPrevChapter.value ? '上一章' : '到头了'
@@ -1201,6 +1256,16 @@ function createVueApp() {
         }
       }
 
+      const setComments = (comments) => {
+        console.log('[漫画阅读器] 接收到评论数据:', comments)
+        if (Array.isArray(comments) && chapter.current) {
+          chapter.current.comments = comments
+          console.log('[漫画阅读器] 当前章节的评论数据已更新！')
+        } else {
+          console.log('[漫画阅读器] 评论数据无效或当前章节数据不存在！')
+        }
+      }
+
       const nextChapter = () => {
         if (!hasNextChapter.value) return showToast('已经是最后一章了')
         showConfirmDialog(
@@ -1224,7 +1289,8 @@ function createVueApp() {
       }
 
       const goToPage = (index) => {
-        index = Math.max(Math.min(index, totalPages.value - 1), 0)
+        const limit = totalPages.value - (hasComments.value ? 0 : 1)
+        index = Math.max(Math.min(index, limit), 0)
         pageIndex.value = index
       }
 
@@ -1438,8 +1504,6 @@ function createVueApp() {
         confirmDialog,
         currentPage,
         totalPages,
-        isCommentPage,
-        pageStatusText,
         currentImage,
         hasComments,
         comments,
@@ -1451,9 +1515,12 @@ function createVueApp() {
         hasPrevChapter,
         isFirstPage,
         isLastPage,
+        isCommentPage,
+        pageStatusText,
         prevButtonTooltip,
         nextButtonTooltip,
         setData,
+        setComments,
         goToPage,
         nextPage,
         prevPage,
@@ -1668,8 +1735,10 @@ function createVueApp() {
               <img :src="currentImage" :alt="'第' + (pageIndex + 1) + '页'" @load="imgStatusList[pageIndex] = 1" @error="imgStatusList[pageIndex] = -1"/>
             </div>
 
-            <div v-else-if="hasComments && isCommentPage" class="vmr-chapter-comments">
-              <div class="vmr-chapter-comments-title">评论</div>
+            <div v-else-if="hasComments && isCommentPage" class="vmr-chapter-comments" :class="{'vmr-safe-ui': isUIVisible }">
+              <div class="vmr-chapter-comments-title">
+                评论 <span>{{ comments.length }}</span>
+              </div>
               <div class="vmr-chapter-comments-list">
                 <div v-for="comment in comments" class="vmr-chapter-comment">
                   <div class="vmr-chapter-comment-content">
@@ -1696,6 +1765,10 @@ function createVueApp() {
             <div v-for="i of slider.max" class="vmr-slider-status-block" :data-page="i" :data-status="imgStatusList[i - 1]" @click="goToPage(i - 1)">
               <span v-if="i - 1 === pageIndex">▼</span>
               <div class="vmr-button-tooltip">{{ i }}</div>
+            </div>
+            <div v-if="hasComments" class="vmr-slider-status-block is-comment"  @click="goToPage(slider.max)">
+              <span v-if="isCommentPage">▼</span>
+              <div class="vmr-button-tooltip">评论</div>
             </div>
           </div>
         </div>
@@ -1735,6 +1808,12 @@ function setMangaData(data) {
   if (!window.$vm) console.error('[漫画阅读器] Vue应用未初始化')
   window.$vm.setupState.setData(data)
   console.log('[漫画阅读器] 数据已设置')
+}
+
+function setComments(comments) {
+  if (!window.$vm) return console.error('[漫画阅读器] Vue应用未初始化')
+  window.$vm.setupState.setComments(comments)
+  console.log('[漫画阅读器] 章节评论已设置')
 }
 
 function clearCurrentCache() {
@@ -1790,11 +1869,13 @@ async function loadMangaData(website, skipCheck = false) {
       throw new Error('extract不是一个Function')
     }
     const data = await website.extract()
-    if (data) {
-      setMangaData(data)
-      console.log('[漫画阅读器] 数据加载成功')
-    } else {
-      console.warn('[漫画阅读器] 未能提取到数据')
+    if (!data) throw new Error('未能提取到数据！')
+    setMangaData(data)
+    console.log('[漫画阅读器] 数据加载成功')
+    if (typeof website.loadComments === 'function') {
+      const comments = await website.loadComments(data)
+      if (comments) setComments(comments)
+      else console.error('未能获取本章节评论！')
     }
   } catch (error) {
     console.error(`[漫画阅读器] ${website.name}数据提取失败:`, error)
