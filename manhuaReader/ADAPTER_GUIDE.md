@@ -106,7 +106,10 @@
       name: string,          // 章节名称（必填）
       url: string,           // 章节URL（必填）
       images: string[],      // 图片URL数组（必填）
-      pageCount: number      // 当前章节总页数（可选）
+      pageCount: number,     // 当前章节总页数（可选）
+      comments: {            // 当前章节评论（可选）
+        text: content 
+      }[]            
     },
     previous: {              // 上一章（可选，无则为null）
       id: string|number,

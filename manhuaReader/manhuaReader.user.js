@@ -448,17 +448,25 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 .vmr-manga-preload img { width: 0; height: 0; }
 .vmr-manga-page {
   height: 100%; max-width: 100%; margin: 0 auto;
-  background: var(--vmr-bg-secondary); box-shadow: var(--vmr-shadow);
-  border-radius: 4px; overflow: hidden;
+  background: var(--vmr-bg-secondary); overflow: hidden;
 }
 .vmr-manga-page img {
   width: auto; max-width: 100%; height: 100%; display: block; object-fit: contain;
 }
+
+.vmr-chapter-comments {
+  height: 100%; width: 100%; max-width: 680px; margin: 0 auto;
+  padding: 16px; background: var(--vmr-bg-secondary);
+}
+.vmr-chapter-comments-title {}
+.vmr-chapter-comments-list {}
+.vmr-chapter-comment {}
+
 .vmr-pagination-bar {
   flex-shrink: 0; display: flex; height: 0; z-index: 5;
   font-size: 12px; text-align: center; color: #ffffff;
   background: var(--vmr-slider-status-bg); opacity: 0;
-  transform: translateY(100%); transition: all 0.3s ease-in-out; 
+  transform: translateY(100%); transition: all 0.3s ease-in-out;
 }
 .vmr-pagination-bar.vmr-show { transform: translateY(0); opacity: 1;
   height: var(--vmr-pagination-bar-height); }
@@ -665,9 +673,10 @@ function extractFromZaimanhua() {
       id: chapterInfo.chapter_id,
       name: chapterInfo.title,
       url: win.location.href,
-      images: chapterInfo.page_url || []
+      images: chapterInfo.page_url || [],
+      pageCount: chapterInfo.page_url?.length || 0,
+      comments: []
     }
-    current.pageCount = current.images.length
 
     // 构建章节列表
     const groups = comicInfo.chapterList.map((group) => ({
@@ -1107,7 +1116,19 @@ function createVueApp() {
       const imgStatusList = ref([])
 
       // 计算属性
+      const hasComments = computed(() =>
+        Array.isArray(chapter.current?.comments)
+      )
+      const comments = computed(() => chapter.current?.comments || [])
+      const currentPage = computed(() => pageIndex.value + 1)
       const totalPages = computed(() => chapter.current?.images?.length || 0)
+      const isCommentPage = computed(
+        () => hasComments.value && pageIndex.value === totalPages.value
+      )
+      const pageStatusText = computed(() => {
+        if (isCommentPage.value) return '评论'
+        return `${currentPage.value} / ${totalPages.value}`
+      })
       const currentImage = computed(
         () => chapter.current?.images?.[pageIndex.value]
       )
@@ -1126,8 +1147,10 @@ function createVueApp() {
 
       const hasNextChapter = computed(() => !!chapter.next)
       const hasPrevChapter = computed(() => !!chapter.previous)
-      const isFirstPage = computed(() => pageIndex.value === 0)
-      const isLastPage = computed(() => pageIndex.value >= totalPages.value - 1)
+      const isFirstPage = computed(() => pageIndex.value <= 0)
+      const isLastPage = computed(
+        () => pageIndex.value >= totalPages.value - (hasComments.value ? 0 : 1)
+      )
 
       const prevButtonTooltip = computed(() => {
         if (isFirstPage.value) return hasPrevChapter.value ? '上一章' : '到头了'
@@ -1136,6 +1159,8 @@ function createVueApp() {
 
       const nextButtonTooltip = computed(() => {
         if (isLastPage.value) return hasNextChapter.value ? '下一章' : '到头了'
+        if (hasComments.value && pageIndex.value + 1 === totalPages.value)
+          return '评论'
         return '下一页'
       })
 
@@ -1205,7 +1230,10 @@ function createVueApp() {
 
       const nextPage = () => {
         if (isUIVisible.value) isUIVisible.value = false
-        if (pageIndex.value < totalPages.value - 1) {
+        if (
+          pageIndex.value < totalPages.value - 1 ||
+          (hasComments.value && pageIndex.value === totalPages.value - 1)
+        ) {
           pageIndex.value++
         } else {
           nextChapter()
@@ -1408,8 +1436,13 @@ function createVueApp() {
         paginationBarMode,
         toast,
         confirmDialog,
+        currentPage,
         totalPages,
+        isCommentPage,
+        pageStatusText,
         currentImage,
+        hasComments,
+        comments,
         sliderValue,
         slider,
         imgStatusList,
@@ -1510,7 +1543,7 @@ function createVueApp() {
               </div>
               <div v-if="['bottom', 'both'].includes(statusBarMode)" class="vmr-setting-item">
                 <label class="vmr-setting-label">分页底条</label>
-                <div class="vmr-setting-options"> 
+                <div class="vmr-setting-options">
                   <label v-for="(v,k) of { 'block': '占位', 'fixed': '悬浮' }" class="vmr-radio">
                     <input type="radio" name="paginationBarMode" :value="k" v-model="paginationBarMode" @change="handlePaginationBarModeChange"/>
                     <span class="vmr-radio-label">{{ v }}</span>
@@ -1581,12 +1614,15 @@ function createVueApp() {
 
         <div class="vmr-navbar" :class="{ 'vmr-show': isUIVisible }">
           <div class="vmr-progress">
-            <div class="vmr-navbar-btn vmr-progress-perv" :class="{ disabled: pageIndex <= 0 && !hasPrevChapter, 'child-icon-rotate-90': pageIndex <= 0 }" @click="prevPage">
+            <div class="vmr-navbar-btn vmr-progress-perv" :class="{
+              disabled: isFirstPage && !hasPrevChapter,
+              'child-icon-rotate-90': isFirstPage
+            }" @click="prevPage">
               ${getIcon('left')}
               <div class="vmr-button-tooltip">{{ prevButtonTooltip }}</div>
             </div>
 
-            <div class="vmr-progress-status">{{ pageIndex + 1 }} / {{ totalPages }}</div>
+            <div class="vmr-progress-status">{{ pageStatusText }}</div>
 
             <div class="vmr-page-slider">
               <div  v-if="['slider', 'both'].includes(statusBarMode)"  class="vmr-slider-stataus-bar" :style="slider.statusBarStyles">
@@ -1605,19 +1641,20 @@ function createVueApp() {
               ${getIcon('settings')}
               <div class="vmr-button-tooltip">设置</div>
             </div>
-            <div class="vmr-navbar-btn vmr-progress-next" :class="{ disabled: pageIndex >= totalPages - 1 && !hasNextChapter, 'child-icon-rotate-90': pageIndex >= totalPages - 1 }" @click="nextPage">
+            <div class="vmr-navbar-btn vmr-progress-next" :class="{
+              disabled: isLastPage && !hasNextChapter,
+              'child-icon-rotate-90': isLastPage
+            }" @click="nextPage">
               ${getIcon('right')}
               <div class="vmr-button-tooltip">{{ nextButtonTooltip }}</div>
             </div>
           </div>
         </div>
 
-        <div class="vmr-pagination-status" :class="{ 
+        <div class="vmr-pagination-status" :class="{
           'vmr-show': !isUIVisible,
           'has-pagination-bar': ['bottom', 'both'].includes(statusBarMode)
-        }">
-          {{ pageIndex + 1 }} / {{ totalPages }}
-        </div>
+        }">{{ pageStatusText }}</div>
 
         <div class="vmr-main-content">
           <div class="vmr-click-zones">
@@ -1629,6 +1666,17 @@ function createVueApp() {
           <div class="vmr-image-container">
             <div v-if="currentImage" class="vmr-manga-page">
               <img :src="currentImage" :alt="'第' + (pageIndex + 1) + '页'" @load="imgStatusList[pageIndex] = 1" @error="imgStatusList[pageIndex] = -1"/>
+            </div>
+
+            <div v-else-if="hasComments && isCommentPage" class="vmr-chapter-comments">
+              <div class="vmr-chapter-comments-title">评论</div>
+              <div class="vmr-chapter-comments-list">
+                <div v-for="comment in comments" class="vmr-chapter-comment">
+                  <div class="vmr-chapter-comment-content">
+                    {{ comment.content }}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div v-else class="vmr-empty-state">
@@ -1643,7 +1691,7 @@ function createVueApp() {
 
           <div v-if="['bottom', 'both'].includes(statusBarMode)" class="vmr-pagination-bar" :class="{
             'vmr-show': !isUIVisible,
-            'vmr-fixed': paginationBarMode === 'fixed' 
+            'vmr-fixed': paginationBarMode === 'fixed'
           }">
             <div v-for="i of slider.max" class="vmr-slider-status-block" :data-page="i" :data-status="imgStatusList[i - 1]" @click="goToPage(i - 1)">
               <span v-if="i - 1 === pageIndex">▼</span>
