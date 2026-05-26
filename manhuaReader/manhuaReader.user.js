@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         漫画阅读器
 // @namespace    http://tampermonkey.net/
-// @version      2.3.1
+// @version      2.3.2
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/*
@@ -233,10 +233,8 @@ const STYLES = `
   background: linear-gradient(135deg, var(--vmr-gradient-start) 0%, var(--vmr-gradient-end) 100%);
 }
 .vmr-manga-title {
-  margin-bottom: 8px; padding: 0 18px; font-size: 18px; font-weight: bold;
-  color: inherit; text-decoration: none;
+  margin-bottom: 8px; padding: 0 18px; font-size: 18px; line-height: 22px;font-weight: bold; color: inherit; word-break: break-all;
 }
-a.vmr-manga-title:hover { text-decoration: underline; }
 .vmr-manga-author {
   margin: 6px 0; padding: 0 18px; font-size: 14px; opacity: 0.9; }
 .vmr-manga-status-and-tags {
@@ -532,10 +530,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 .vmr-empty-state-text { font-size: 16px; }
 
 .vmr-toast {
-  position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
-  z-index: 10000; background-color: var(--vmr-toast-bg); color: var(--vmr-bg-secondary);
-  padding: 10px 20px; border-radius: 4px; font-size: 14px;
-  transition: opacity 0.3s; pointer-events: none; opacity: 0;
+  position: absolute; top: 80px; left: 50%; transform: translateX(-50%); z-index: 10000; box-shadow: var(--vmr-shadow); background-color: var(--vmr-toast-bg); backdrop-filter: blur(4px); color: var(--vmr-bg-secondary);  padding: 10px 20px; border-radius: 4px; font-size: 14px; transition: opacity 0.3s; pointer-events: none; opacity: 0;
 }
 .vmr-toast.vmr-show { opacity: 1; }
 
@@ -1662,8 +1657,10 @@ function createVueApp() {
 
         <div class="vmr-sidebar" :class="{ 'vmr-show': isUIVisible && isSidebarVisible }">
           <div class="vmr-sidebar-header">
-            <a v-if="manga?.url" class="vmr-manga-title" :href="manga.url" target="_blank" rel="noopener noreferrer">{{ manga?.title || '未加载漫画' }}</a>
-            <div v-else class="vmr-manga-title">{{ manga?.title || '未加载漫画' }}</div>
+            <div class="vmr-manga-title">
+              <a v-if="manga?.url" :href="manga.url" target="_blank" rel="noopener noreferrer">{{ manga?.title || '未加载漫画' }}</a>
+              <span v-else>{{ manga?.title || '未加载漫画' }}</span>
+            </div>
             <div class="vmr-manga-author">{{ manga?.author || '未知作者' }}</div>
             <div v-if="manga.status || ( Array.isArray(manga.tags) && manga.tags.length )" class="vmr-manga-status-and-tags">
               <span class="vmr-manga-status" :style="{ color: manga.status?.includes('完结') ? '#f53f3f' : '#00b42a' }">
