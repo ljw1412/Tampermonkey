@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         漫画阅读器
 // @namespace    http://tampermonkey.net/
-// @version      2.3.0
+// @version      2.3.1
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/*
@@ -26,6 +26,7 @@ const CONFIG = {
   THEME_KEY: 'vmr-theme',
   DEFAULT_THEME: 'light',
   AUTO_HIDE_DELAY: 1000,
+  HIGHLIGHT_ACTIVE_CHAPTER_DELAY: 1000,
   PRELOAD_COUNT_KEY: 'vmr-preload-count',
   PRELOAD_OFFSET: 2,
   TOAST_DURATION: 2000,
@@ -228,51 +229,33 @@ const STYLES = `
 .vmr-sidebar.vmr-show { transform: translateX(0); opacity: 1; }
 
 .vmr-sidebar-header {
-  padding: 20px 0;
+  padding-top: 20px; color: white;
   background: linear-gradient(135deg, var(--vmr-gradient-start) 0%, var(--vmr-gradient-end) 100%);
-  color: white;
 }
 .vmr-manga-title {
   margin-bottom: 8px; padding: 0 18px; font-size: 18px; font-weight: bold;
   color: inherit; text-decoration: none;
 }
 a.vmr-manga-title:hover { text-decoration: underline; }
-.vmr-manga-author { margin-top: 6px; padding: 0 18px; font-size: 14px; opacity: 0.9; }
+.vmr-manga-author {
+  margin: 6px 0; padding: 0 18px; font-size: 14px; opacity: 0.9; }
 .vmr-manga-status-and-tags {
   display: flex; align-items: center; flex-wrap: wrap;
-  margin-top: 4px; padding: 0 18px; opacity: 0.9; }
+  margin: 6px 0; padding: 0 18px; opacity: 0.9; }
 .vmr-manga-status-and-tags > * {
   flex-shrink: 0; display: inline-block; box-sizing: content-box;
-  margin-top: 4px; padding: 4px; height: 10px; font-size: 10px;
+  margin-bottom: 4px; padding: 4px; height: 10px; font-size: 10px;
   border: 1px solid currentColor; border-radius: 4px; }
 .vmr-manga-status-and-tags > *:not(:last-child) { margin-right: 4px; }
 
 .vmr-manga-desc {
-  margin-top: 6px; padding: 0 18px;  color: white; opacity: 0.85;
+  margin: 6px 0; padding: 0 18px;  color: white; opacity: 0.85;
   font-size: 13px; line-height: 1.4; min-height: 1.4em; max-height: 5.6em;
   overflow-y: auto; word-break: break-all; box-sizing: content-box; flex-shrink: 0;
 }
 .vmr-manga-desc::-webkit-scrollbar-track { background: transparent; }
 
-.vmr-chapter-info {
-  padding: 16px 18px; border-bottom: 1px solid var(--vmr-border-color);
-  background: var(--vmr-bg-primary);
-}
-.vmr-current-chapter { font-size: 14px; color: var(--vmr-text-primary); margin-bottom: 5px; }
-.vmr-current-chapter-pagecount { font-size: 12px; opacity: 0.75; }
-.vmr-chapter-nav { display: flex; gap: 10px; margin-top: 10px; }
-.vmr-chapter-nav button {
-  flex: 1; padding: 8px 12px; border: none; border-radius: 4px;
-  background: var(--vmr-active-bg); color: white; cursor: pointer;
-  font-size: 13px; transition: all 0.3s;
-}
-.vmr-chapter-nav button:hover { background: var(--vmr-confirm-btn-hover); transform: translateY(-1px); }
-.vmr-chapter-nav button:disabled {
-  color: var(--vmr-disabled-color); background: var(--vmr-disabled-bg);
-  cursor: not-allowed; transform: none;
-}
-
-.vmr-chapter-group-list { user-select: none; overflow-y: auto; overflow-x: hidden; }
+.vmr-chapter-group-list { flex-grow: 1; user-select: none; overflow-y: auto; overflow-x: hidden; }
 .vmr-chapter-group{ padding: 10px; }
 .vmr-chapter-group-title { margin-bottom: 10px; text-align: center; color: var(--vmr-text-primary); font-size: 16px; font-weight: bold; }
 .vmr-chapter-list {
@@ -282,12 +265,16 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 .vmr-chapter-item {
   position: relative; padding: 16px 12px; border-radius: 6px; cursor: pointer;
   text-align: center; transition: all 0.2s; background: var(--vmr-bg-secondary);
-  border: 1px solid var(--vmr-border-color);
+  border: 1px solid var(--vmr-border-color); outline: 1px solid transparent;
 }
 .vmr-chapter-item:hover { background: var(--vmr-hover-bg); border-color: var(--vmr-active-bg); }
 .vmr-chapter-item.active {
   background: var(--vmr-active-bg); color: var(--vmr-active-text);
   border-color: var(--vmr-active-bg);
+}
+.vmr-chapter-item.active.highlight {
+  outline-color: var(--vmr-active-text); 
+  box-shadow: 0 0 24px var(--vmr-active-bg);
 }
 .vmr-chapter-name {
   font-size: 14px; font-weight: 500; overflow: hidden;
@@ -301,6 +288,31 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 }
 .vmr-chapter-update-time { font-size: 12px; color: var(--vmr-text-muted); margin-top: 4px; }
 .vmr-chapter-item.active .vmr-chapter-update-time { color: rgba(255,255,255,0.8); }
+
+
+.vmr-chapter-info {
+  flex-shrink: 0; padding: 16px 18px; background: var(--vmr-bg-primary);
+  border-top: 1px solid var(--vmr-border-color);
+}
+.vmr-current-chapter { font-size: 14px; color: var(--vmr-text-primary); margin-bottom: 5px; }
+.vmr-current-chapter-pagecount { font-size: 12px; opacity: 0.75; }
+.vmr-chapter-nav { display: flex; gap: 10px; margin-top: 10px; }
+.vmr-chapter-nav button {
+  flex: 1; display: flex; justify-content: center; align-items: center;
+  border: none; border-radius: 4px; padding: 0 12px; height: 30px;
+  background: var(--vmr-confirm-btn-bg); color: white; cursor: pointer;
+  font-size: 13px; outline: 1px solid transparent; transition: all 0.3s;
+}
+.vmr-chapter-nav button.vmr-auto-btn { flex: 0 1 auto; }
+.vmr-chapter-nav button:not(:disabled):hover { 
+  background: var(--vmr-confirm-btn-hover); 
+  outline-color: var(--vmr-confirm-btn-bg); 
+  box-shadow: 0 0 12px var(--vmr-confirm-btn-bg); }
+.vmr-chapter-nav button:disabled {
+  color: var(--vmr-disabled-color); background: var(--vmr-disabled-bg);
+  cursor: not-allowed; transform: none;
+}
+.vmr-chapter-nav button > span { margin: 0 0.5em; }
 
 .vmr-toolbar {
   position: absolute; top: 0; left: 0; height: var(--vmr-toolbar-height); display: flex; justify-content: space-between; align-items: center; padding-left: 20px; z-index: 999; transform: translateY(-100%); transition: all 0.3s ease-in-out; opacity: 0;
@@ -468,7 +480,7 @@ a.vmr-manga-title:hover { text-decoration: underline; }
 }
 .vmr-chapter-comments-title > span { font-size: 16px; }
 .vmr-chapter-comments-list {
-  display: flex; flex-wrap: wrap; margin-top: 8px; color: var(--vmr-text-secondary);
+  display: flex; flex-wrap: wrap; margin-top: 12px; color: var(--vmr-text-secondary);
 }
 .vmr-chapter-comment, .vmr-chapter-comment > * { font-size: 16px; }
 .vmr-chapter-comment {
@@ -697,13 +709,15 @@ async function extractFromZaimanhua() {
     // 构建章节列表
     const groups = comicInfo.chapterList.map((group) => ({
       title: group.title,
-      data: group.data.map((ch) => ({
-        id: ch.chapter_id,
-        name: ch.chapter_title,
-        url: `./${ch.chapter_id}`,
-        updatedAt: formatTimestamp(ch.updatetime),
-        order: ch.chapter_order
-      }))
+      data: group.data
+        .map((ch) => ({
+          id: ch.chapter_id,
+          name: ch.chapter_title,
+          url: `./${ch.chapter_id}`,
+          updatedAt: formatTimestamp(ch.updatetime),
+          order: ch.chapter_order
+        }))
+        .sort((a, b) => a.order - b.order)
     }))
     const list = groups
       .flatMap((group) => group.data)
@@ -1085,8 +1099,19 @@ const ICON = {
   fold: `<path d="M42 11H6M42 24H22M42 37H6M13.66 26.912l-4.82-3.118 4.82-3.118v6.236Z"></path>`,
   unfold: `<path d="M6 11h36M22 24h20M6 37h36M8 20.882 12.819 24 8 27.118v-6.236Z"></path>`,
   settings: `<path d="M18.797 6.732A1 1 0 0 1 19.76 6h8.48a1 1 0 0 1 .964.732l1.285 4.628a1 1 0 0 0 1.213.7l4.651-1.2a1 1 0 0 1 1.116.468l4.24 7.344a1 1 0 0 1-.153 1.2L38.193 23.3a1 1 0 0 0 0 1.402l3.364 3.427a1 1 0 0 1 .153 1.2l-4.24 7.344a1 1 0 0 1-1.116.468l-4.65-1.2a1 1 0 0 0-1.214.7l-1.285 4.628a1 1 0 0 1-.964.732h-8.48a1 1 0 0 1-.963-.732L17.51 36.64a1 1 0 0 0-1.213-.7l-4.65 1.2a1 1 0 0 1-1.116-.468l-4.24-7.344a1 1 0 0 1 .153-1.2L9.809 24.7a1 1 0 0 0 0-1.402l-3.364-3.427a1 1 0 0 1-.153-1.2l4.24-7.344a1 1 0 0 1 1.116-.468l4.65 1.2a1 1 0 0 0 1.213-.7l1.286-4.628Z"></path><path d="M30 24a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"></path>`,
+  location: `<circle cx="24" cy="19" r="5"></circle><path d="M39 20.405C39 28.914 24 43 24 43S9 28.914 9 20.405C9 11.897 15.716 5 24 5c8.284 0 15 6.897 15 15.405Z"></path>`,
+  up: `<path d="M39.6 30.557 24.043 15 8.487 30.557"></path>`,
+  down: `<path d="M39.6 17.443 24.043 33 8.487 17.443"></path>`,
   left: `<path d="M32 8.4 16.444 23.956 32 39.513"></path>`,
-  right: `<path d="m16 39.513 15.556-15.557L16 8.4"></path>`
+  right: `<path d="m16 39.513 15.556-15.557L16 8.4"></path>`,
+  doubleUp: `<path d="M38.1 36.858 23.957 22.716 9.816 36.858M38.1 25.544 23.957 11.402 9.816 25.544"></path>`,
+  doubleDown: `<path d="m9.9 11.142 14.143 14.142 14.142-14.142M9.9 22.456l14.143 14.142 14.142-14.142"></path>`,
+  doubleLeft: `<path d="M36.857 9.9 22.715 24.042l14.142 14.142M25.544 9.9 11.402 24.042l14.142 14.142"></path>`,
+  doubleRight: `<path d="m11.143 38.1 14.142-14.142L11.143 9.816M22.456 38.1l14.142-14.142L22.456 9.816"></path>`,
+  caretUp: `<path d="M23.063 13.171a1.2 1.2 0 0 1 1.875 0l13.503 16.88c.628.785.069 1.949-.937 1.949H10.497c-1.006 0-1.565-1.164-.937-1.95l13.503-16.879Z" fill="currentColor" stroke="none"></path>`,
+  caretDown: `<path d="M24.938 34.829a1.2 1.2 0 0 1-1.875 0L9.56 17.949c-.628-.785-.069-1.949.937-1.949h27.007c1.006 0 1.565 1.164.937 1.95L24.937 34.829Z" fill="currentColor" stroke="none"></path>`,
+  caretLeft: `<path d="M13.171 24.937a1.2 1.2 0 0 1 0-1.874L30.051 9.56c.785-.629 1.949-.07 1.949.937v27.006c0 1.006-1.164 1.566-1.95.937L13.171 24.937Z" fill="currentColor" stroke="none"></path>`,
+  caretRight: `<path d="M34.829 23.063c.6.48.6 1.394 0 1.874L17.949 38.44c-.785.629-1.949.07-1.949-.937V10.497c0-1.007 1.164-1.566 1.95-.937l16.879 13.503Z" fill="currentColor" stroke="none"></path>`
 }
 
 function getIcon(name, props = '') {
@@ -1124,20 +1149,19 @@ function createVueApp() {
       const isSidebarVisible = ref(false)
       const isClickZoneLocked = ref(false)
       const isSettingsVisible = ref(false)
+      // 让当前章节高亮
+      const isActiveChapterHighlight = ref(false)
 
       // 主题
       const theme = ref(GM_getValue(CONFIG.THEME_KEY, CONFIG.DEFAULT_THEME))
-
       // 预载数量
       const preloadCount = ref(
         GM_getValue(CONFIG.PRELOAD_COUNT_KEY, CONFIG.PRELOAD_OFFSET)
       )
-
       // 加载状态栏模式
       const statusBarMode = ref(
         GM_getValue(CONFIG.STATUS_BAR_MODE_KEY, CONFIG.STATUS_BAR_MODE)
       )
-
       // 分页条显示的模式
       const paginationBarMode = ref(
         GM_getValue(CONFIG.PAGINATION_BAR_MODE_KEY, CONFIG.PAGINATION_BAR_MODE)
@@ -1264,6 +1288,18 @@ function createVueApp() {
         } else {
           console.log('[漫画阅读器] 评论数据无效或当前章节数据不存在！')
         }
+      }
+
+      const highlightActiveChapterTimer = null
+      const highlightActiveChapter = () => {
+        if (highlightActiveChapterTimer) {
+          clearTimeout(highlightActiveChapterTimer)
+          highlightActiveChapterTimer = null
+        }
+        isActiveChapterHighlight.value = true
+        highlightActiveChapterTimer = setTimeout(() => {
+          isActiveChapterHighlight.value = false
+        }, CONFIG.HIGHLIGHT_ACTIVE_CHAPTER_DELAY)
       }
 
       const nextChapter = () => {
@@ -1408,13 +1444,14 @@ function createVueApp() {
       }
 
       // 侧边栏章节列表滚动到当前章节
-      const scrollToActiveChapter = () => {
+      const scrollToActiveChapter = (highlight = false) => {
         setTimeout(() => {
           const el = document.querySelector('.vmr-chapter-item.active')
           if (el) {
             el.scrollIntoView({ block: 'center' })
             if (readerContainerEl.value) readerContainerEl.value.scrollTo(0, 0)
           }
+          if (highlight) highlightActiveChapter()
         }, 0)
       }
 
@@ -1496,6 +1533,7 @@ function createVueApp() {
         isSidebarVisible,
         isClickZoneLocked,
         isSettingsVisible,
+        isActiveChapterHighlight,
         theme,
         preloadCount,
         statusBarMode,
@@ -1521,6 +1559,7 @@ function createVueApp() {
         nextButtonTooltip,
         setData,
         setComments,
+        highlightActiveChapter,
         goToPage,
         nextPage,
         prevPage,
@@ -1637,22 +1676,11 @@ function createVueApp() {
             <div v-if="manga?.description" class="vmr-manga-desc">{{ manga.description }}</div>
           </div>
 
-          <div class="vmr-chapter-info">
-            <div class="vmr-current-chapter">
-              当前: {{ chapter.current?.name || '未选择' }}
-              <span v-if="chapter.current?.pageCount" class="vmr-current-chapter-pagecount">{{ chapter.current.pageCount }}P</span>
-            </div>
-            <div class="vmr-chapter-nav">
-              <button :disabled="!hasPrevChapter" @click="loadChapter(chapter.previous)">← 上一章</button>
-              <button :disabled="!hasNextChapter" @click="loadChapter(chapter.next)">下一章 →</button>
-            </div>
-          </div>
-
           <div class="vmr-chapter-group-list">
             <div v-for="group in chapter.groups" :key="group.title" class="vmr-chapter-group">
               <div class="vmr-chapter-group-title">{{ group.title }}</div>
               <div class="vmr-chapter-list">
-                <div v-for="ch in group.data" :key="ch.id" class="vmr-chapter-item" :class="{ active: chapter.current?.id === ch.id }" :title="ch.name" @click="loadChapter(ch)">
+                <div v-for="ch in group.data" :key="ch.id" class="vmr-chapter-item" :class="{ active: chapter.current?.id === ch.id, highlight: isActiveChapterHighlight }" :title="ch.name" @click="loadChapter(ch)">
                   <div v-if="ch.pageCount" class="vmr-chapter-pagecount">
                     {{ ch.pageCount }}P</div>
                   <div class="vmr-chapter-name">
@@ -1660,6 +1688,18 @@ function createVueApp() {
                   <div class="vmr-chapter-update-time" v-if="ch.updatedAt">{{ ch.updatedAt }}</div>
                 </div>
               </div>
+            </div>
+          </div>
+          
+          <div class="vmr-chapter-info">
+            <div class="vmr-current-chapter">
+              当前: {{ chapter.current?.name || '未选择' }}
+              <span v-if="chapter.current?.pageCount" class="vmr-current-chapter-pagecount">{{ chapter.current.pageCount }}P</span>
+            </div>
+            <div class="vmr-chapter-nav">
+              <button :disabled="!hasPrevChapter" @click="loadChapter(chapter.previous)">${getIcon('up')}<span>上一章</span></button>
+              <button class="vmr-auto-btn" @click="scrollToActiveChapter(true)">${getIcon('location')}<span>当前</span></button>
+              <button :disabled="!hasNextChapter" @click="loadChapter(chapter.next)"><span>下一章</span>${getIcon('down')}</button>
             </div>
           </div>
         </div>
