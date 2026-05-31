@@ -21,6 +21,7 @@
 const CONFIG = {
   USE_ARIA2_KEY: 'use-aria2',
   THEME_KEY: 'manhuagui_theme',
+  WIDE_MODE_KEY: 'manhuagui_wide',
   ARIA2_RPC_URL: 'http://localhost:6800/jsonrpc',
   IMG_BASE_URL: 'https://us.hamreus.com',
   DEFAULT_USER_AGENT:
@@ -32,11 +33,20 @@ const CONFIG = {
 }
 
 // ==================== SVG图标 ====================
-const ICONS = {
-  MOON: '<svg data-v-2bc6460e="" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="arco-icon arco-icon-moon-fill" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter" filter="" style="font-size: 32px;"><path d="M42.108 29.769c.124-.387-.258-.736-.645-.613A17.99 17.99 0 0 1 36 30c-9.941 0-18-8.059-18-18 0-1.904.296-3.74.844-5.463.123-.387-.226-.768-.613-.645C10.558 8.334 5 15.518 5 24c0 10.493 8.507 19 19 19 8.482 0 15.666-5.558 18.108-13.231Z" fill="currentColor" stroke="none"></path></svg>',
-  SUN: '<svg data-v-2bc6460e="" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="arco-icon arco-icon-sun" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter" filter="" style="font-size: 32px;"><circle cx="24" cy="24" r="7"></circle><path d="M23 7h2v2h-2zM23 39h2v2h-2zM41 23v2h-2v-2zM9 23v2H7v-2zM36.73 35.313l-1.415 1.415-1.414-1.415 1.414-1.414zM14.099 12.686l-1.414 1.415-1.414-1.415 1.414-1.414zM12.687 36.728l-1.414-1.415 1.414-1.414 1.414 1.414zM35.314 14.1 33.9 12.686l1.414-1.414 1.415 1.414z"></path><path fill="currentColor" stroke="none" d="M23 7h2v2h-2zM23 39h2v2h-2zM41 23v2h-2v-2zM9 23v2H7v-2zM36.73 35.313l-1.415 1.415-1.414-1.415 1.414-1.414zM14.099 12.686l-1.414 1.415-1.414-1.415 1.414-1.414zM12.687 36.728l-1.414-1.415 1.414-1.414 1.414 1.414zM35.314 14.1 33.9 12.686l1.414-1.414 1.415 1.414z"></path></svg>'
+const ICON = {
+  MOON: '<path d="M42.108 29.769c.124-.387-.258-.736-.645-.613A17.99 17.99 0 0 1 36 30c-9.941 0-18-8.059-18-18 0-1.904.296-3.74.844-5.463.123-.387-.226-.768-.613-.645C10.558 8.334 5 15.518 5 24c0 10.493 8.507 19 19 19 8.482 0 15.666-5.558 18.108-13.231Z" fill="currentColor" stroke="none"></path>',
+  SUN: '<circle cx="24" cy="24" r="7"></circle><path d="M23 7h2v2h-2zM23 39h2v2h-2zM41 23v2h-2v-2zM9 23v2H7v-2zM36.73 35.313l-1.415 1.415-1.414-1.415 1.414-1.414zM14.099 12.686l-1.414 1.415-1.414-1.415 1.414-1.414zM12.687 36.728l-1.414-1.415 1.414-1.414 1.414 1.414zM35.314 14.1 33.9 12.686l1.414-1.414 1.415 1.414z"></path><path fill="currentColor" stroke="none" d="M23 7h2v2h-2zM23 39h2v2h-2zM41 23v2h-2v-2zM9 23v2H7v-2zM36.73 35.313l-1.415 1.415-1.414-1.415 1.414-1.414zM14.099 12.686l-1.414 1.415-1.414-1.415 1.414-1.414zM12.687 36.728l-1.414-1.415 1.414-1.414 1.414 1.414zM35.314 14.1 33.9 12.686l1.414-1.414 1.415 1.414z"></path>',
+  SHRINK: `<path d="M20 44V29c0-.552-.444-1-.996-1H4M28 4v15c0 .552.444 1 .996 1H44"></path>`,
+  EXPAND: `<path d="M7 26v14c0 .552.444 1 .996 1H22m19-19V8c0-.552-.444-1-.996-1H26"></path>`
 }
 
+function getIcon(name, props = '') {
+  if (!name) return ''
+  const upperName = name.toUpperCase()
+  const lowerName = name.toLowerCase()
+  if (!ICON[upperName]) return ''
+  return `<svg ${props} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="mhh-icon mhh-icon-${lowerName}" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter">${ICON[upperName]}</svg>`
+}
 // ==================== 深色模式CSS样式 ====================
 
 /* prettier-ignore */
@@ -123,10 +133,14 @@ function generateCssString(config, prefix = '') {
   return cssText.trim()
 }
 
-const DARK_MODE_STYLES = `
-.btn-theme-switch {
+const BASE_STYLES = `
+.mhh-icon {
+  display: inline-block; width: 1em; height: 1em; color: inherit;
+  font-style: normal; vertical-align: -2px; outline: none; stroke: currentColor;
+}
+
+.mhh-action-btn {
   position: fixed;
-  bottom: 175px;
   right: 10px;
   display: flex;
   align-items: center;
@@ -140,18 +154,24 @@ const DARK_MODE_STYLES = `
   cursor: pointer;
   z-index: 10001;
 }
-.btn-theme-switch:hover {
+.mhh-action-btn:hover {
   background-color: #e32727;
 }
-.btn-theme-switch > svg {
+.mhh-action-btn > svg {
   width: 1em;
   height: 1em;
   opacity: var(--theme-switch-opacity, 0.8);
 }
-.btn-theme-switch:hover > svg {
+.mhh-action-btn:hover > svg {
   opacity: 1;
 }
 
+.btn-theme-switch { bottom: 175px; }
+
+.btn-wide-switch { bottom: 220px; }
+`
+
+const DARK_MODE_STYLES = `
 html[data-theme='dark'] {
   --color-primary: #fe4800;
   --color-white: rgba(255, 255, 255, .9);
@@ -187,6 +207,32 @@ html[data-theme='dark'] * {
 }
 
 ${generateCssString(darkThemeConfig, 'html[data-theme="dark"]')}
+`
+
+const widefyConfig = {
+  'width: 1386px': ['.book-list ul'],
+  'width: 1280px': ['.w998'],
+  'width: 1200px': ['.filter-nav .filter'],
+  'width: 1134px': ['.filter-nav .filter ul'],
+  'width: 160px': ['.nav-sub'],
+  'width: 140px': [
+    '.nav-main li',
+    '.nav-main li.first',
+    '.bcover .mk',
+    '.bcover .tt'
+  ],
+  'width: 139px': ['.nav-less'],
+  'width: 156px': ['.book-list li', '.bcover', '.bcover .bg'],
+  'height: 275px': ['.book-list li'],
+  'height: 206px': ['.bcover', '.bcover .bg'],
+  'background-position: -145px 0': ['.bcover .bg'],
+  'background-size: 343%': ['.bcover .bg'],
+  'width: 148px': ['.bcover img'],
+  'height: 197px': ['.bcover img']
+}
+
+const WIDEFY_STYLES = `
+${generateCssString(widefyConfig, 'html[data-widefy="true"]')}
 `
 
 // ==================== Aria2菜单管理 ====================
@@ -279,13 +325,14 @@ class UI {
 
 // ==================== 深色模式 ====================
 function addDarkMode() {
-  const btnDarkSwitch = $('<div class="btn-theme-switch"></div>')
+  const btnDarkSwitch = $('<div class="mhh-action-btn btn-theme-switch"></div>')
 
   function updateTheme() {
     const theme = GM_getValue(CONFIG.THEME_KEY, 'light')
     const isDark = theme === 'dark'
     $('html').attr('data-theme', isDark ? 'dark' : null)
-    btnDarkSwitch.empty().append(isDark ? ICONS.MOON : ICONS.SUN)
+    const icon = getIcon(isDark ? 'MOON' : 'SUN')
+    btnDarkSwitch.empty().append(icon)
   }
 
   updateTheme()
@@ -296,10 +343,34 @@ function addDarkMode() {
     updateTheme()
   })
 
-  $('body').append(btnDarkSwitch)
-
-  // 将CSS样式提取为常量（保持原有样式不变）
   GM_addStyle(DARK_MODE_STYLES)
+  $('body').append(btnDarkSwitch)
+}
+
+// ==================== 宽窄模式 ====================
+function addWideMode() {
+  const btnWideSwitch = $('<div class="mhh-action-btn btn-wide-switch"></div>')
+
+  function updateWideMode() {
+    const isWide = GM_getValue(CONFIG.WIDE_MODE_KEY, false)
+    $('html').attr('data-widefy', isWide ? 'true' : null)
+    const icon = getIcon(
+      isWide ? 'SHRINK' : 'EXPAND',
+      'style="transform: rotate(45deg);"'
+    )
+    btnWideSwitch.empty().append(icon)
+  }
+
+  updateWideMode()
+
+  btnWideSwitch.click(() => {
+    const isWide = GM_getValue(CONFIG.WIDE_MODE_KEY, false)
+    GM_setValue(CONFIG.WIDE_MODE_KEY, !isWide)
+    updateWideMode()
+  })
+
+  GM_addStyle(WIDEFY_STYLES)
+  $('body').append(btnWideSwitch)
 }
 
 // ==================== 解析工具函数 ====================
@@ -588,7 +659,9 @@ if (location.host.includes('manhuagui.com')) {
     $.cookie('country', 'HK', { domain: 'manhuagui.com', path: '/' })
     location.reload()
   }
+  GM_addStyle(BASE_STYLES)
   addDarkMode()
+  if (location.pathname.startsWith('/list')) addWideMode()
 }
 
 $(document).ready(function () {
