@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         漫画阅读器
 // @namespace    http://tampermonkey.net/
-// @version      2.5.0
+// @version      2.5.1
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/*
@@ -2112,13 +2112,8 @@ function createVueApp() {
                 <img :src="currentImage" :alt="'第' + (pageIndex + 1) + '页'" @load="imgStatusList[pageIndex] = 1" @error="imgStatusList[pageIndex] = -1"/>
               </div>
             </template>
-            <template v-else-if="layoutMode === 'vertical'"> 
+            <template v-else-if="['vertical','horizontal'].includes(layoutMode)"> 
               <div v-for="(item,index) of chapter.current.images" class="vmr-manga-page" :data-page="index + 1">
-                <img :src="item" :alt="'第' + (index + 1) + '页'" @load="imgStatusList[index] = 1" @error="imgStatusList[index] = -1"/>
-              </div>
-            </template>
-            <template v-else-if="layoutMode === 'horizontal'"> 
-              <div v-for="(item,index) of chapter.current.images"  class="vmr-manga-page" :data-page="index + 1">
                 <img :src="item" :alt="'第' + (index + 1) + '页'" @load="imgStatusList[index] = 1" @error="imgStatusList[index] = -1"/>
               </div>
             </template>
