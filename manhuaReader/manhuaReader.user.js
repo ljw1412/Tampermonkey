@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         漫画阅读器
 // @namespace    http://tampermonkey.net/
-// @version      2.4.0
+// @version      2.5.0
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/*
@@ -20,23 +20,77 @@
 // ==/UserScript==
 
 /* global Vue ajaxHooker */
-
+// TODO 是否在切换上下页时隐藏UI
+// TODO 待修复：垂直滚动模式下，当前页pageIndex未更新
 // ==================== 常量配置 ====================
 const CONFIG = {
   APP_NAME: '漫画阅读器',
   CACHE_PREFIX: 'cache_',
-  THEME_KEY: 'vmr-theme',
-  DEFAULT_THEME: 'light',
   AUTO_HIDE_DELAY: 1000,
   HIGHLIGHT_ACTIVE_CHAPTER_DELAY: 1000,
-  PRELOAD_COUNT_KEY: 'vmr-preload-count',
-  PRELOAD_OFFSET: 2,
-  TOAST_DURATION: 2000,
-  STATUS_BAR_MODE_KEY: 'vmr-status-bar-mode',
-  STATUS_BAR_MODE: 'none', // 'none' | 'slider' | 'bottom' | 'both'
-  PAGINATION_BAR_MODE_KEY: 'vmr-pagination-bar-mode',
-  PAGINATION_BAR_MODE: 'block' // 'block' | 'fixed'
-  // TODO 是否在切换上下页时隐藏UI
+  TOAST_DURATION: 2000
+}
+
+const SETTINGS = {
+  theme: {
+    key: 'vmr-theme',
+    options: [
+      { label: '亮色', value: 'light' },
+      { label: '暗色', value: 'dark' }
+    ],
+    default: 'light'
+  },
+  layout: {
+    key: 'vmr-layout-mode',
+    options: [
+      { label: '左右翻页', value: 'paged' },
+      { label: '垂直滚动', value: 'vertical' },
+      { label: '水平滚动', value: 'horizontal' }
+    ],
+    default: 'paged'
+  },
+  vPageWidth: {
+    key: 'vmr-page-width-on-vertical',
+    options: [
+      { label: '自动', value: 'auto' },
+      { label: '600x', value: '600px' },
+      { label: '800x', value: '800px' },
+      { label: '1000x', value: '1000px' },
+      { label: '1200x', value: '1200px' },
+      { label: '100%', value: '100%' }
+    ],
+    default: 'auto'
+  },
+  preload: {
+    key: 'vmr-preload-count',
+    options: [
+      { label: '关', value: 0 },
+      ...Array.from({ length: 5 }, (_, i) => ({
+        label: `${i + 1}组`,
+        value: i + 1
+      }))
+    ],
+    default: 2
+  },
+  statusBar: {
+    key: 'vmr-status-bar-mode',
+    options: [
+      { label: '不显示', value: 'none' },
+      { label: '导航条', value: 'slider' },
+      { label: '底部条', value: 'bottom' },
+      { label: '都显示', value: 'both' }
+    ],
+    default: 'none'
+  },
+  paginationBar: {
+    key: 'vmr-pagination-bar-mode',
+    options: [
+      // { label: '不显示', value: 'none' },
+      { label: '占位', value: 'block' },
+      { label: '悬浮', value: 'fixed' }
+    ],
+    default: 'block'
+  }
 }
 
 // ==================== 工具类 ====================
@@ -104,7 +158,7 @@ const $cache = new CacheManager()
  */
 function formatTimestamp(timestamp) {
   if (!timestamp) return ''
-  const date = new Date(timestamp * 1000)
+  const date = new Date(timestamp)
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
@@ -447,13 +501,13 @@ const STYLES = `
   position: absolute; top: 0; left: 0; right: 0; bottom: 0;
   display: flex; z-index: 1;
 }
-.vmr-click-zone { flex: 1; cursor: pointer; transition: background-color 0.2s; }
+.vmr-click-zone { flex: 1; transition: background-color 0.2s; }
 .vmr-click-zone:hover { background-color: rgba(0, 0, 0, 0.02); }
-.vmr-click-zone.left {
+.vmr-click-zone.zone-left {
   cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="2"><path d="M15 19l-7-7 7-7"/></svg>') 16 16, w-resize;
 }
-.vmr-click-zone.center { cursor: pointer; }
-.vmr-click-zone.right {
+.vmr-click-zone.zone-center { cursor: pointer; }
+.vmr-click-zone.zone-right {
   cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>') 16 16, e-resize;
 }
 
@@ -466,12 +520,36 @@ const STYLES = `
 }
 .vmr-manga-preload img { width: 0; height: 0; }
 .vmr-manga-page {
-  height: 100%; max-width: 100%; margin: 0 auto; overflow: hidden;
-  background: var(--vmr-bg-secondary); box-shadow: var(--vmr-shadow);
+  margin: 0 auto; overflow: hidden; background: var(--vmr-bg-secondary);
 }
 .vmr-manga-page img {
   width: auto; max-width: 100%; height: 100%; display: block; object-fit: contain;
 }
+.vmr-manga-page[data-type="paged"] {
+  height: 100%; max-width: 100%; box-shadow: var(--vmr-shadow);
+}
+.vmr-manga-page[data-type="vertical"] { 
+  flex-shrink: 0; width: var(--vmr-vertical-page-width);
+}
+.vmr-manga-page[data-type="horizontal"] { 
+}
+.vmr-main-content[data-mode="vertical"] { cursor: pointer; }
+.vmr-main-content[data-mode="vertical"] .vmr-click-zones { 
+  flex-direction: column;
+}
+.vmr-main-content[data-mode="vertical"] .vmr-click-zone { 
+  width: 100%;
+}
+.vmr-main-content[data-mode="vertical"] .vmr-image-container {
+  flex-direction: column; overflow: auto;
+}
+.vmr-main-content[data-mode="vertical"] .vmr-manga-page img {
+  width: 100%;
+}
+.vmr-main-content[data-mode="vertical"] .vmr-chapter-comments {
+  min-height: 100vh;
+}
+
 
 .vmr-chapter-comments {
   height: 100%; width: 100%; max-width: 680px; margin: 0 auto; padding: 16px;
@@ -595,9 +673,7 @@ const STYLES = `
 .vmr-settings-close:hover {
   background: var(--vmr-hover-bg); color: var(--vmr-text-primary);
 }
-.vmr-settings-content {
-  padding: 24px; max-height: 60vh; overflow-y: auto; user-select: none;
-}
+.vmr-settings-content { max-height: calc(100vh - 84px); padding: 24px; overflow-y: auto; user-select: none; }
 
 .vmr-setting-item {
   display: grid; grid-template-columns: auto 1fr; gap: 8px 24px;
@@ -615,7 +691,7 @@ const STYLES = `
 }
 .vmr-radio {
   display: inline-flex; align-items: center; justify-content: center;
-  padding: 8px 24px; border-radius: 9999px; cursor: pointer;
+  padding: 8px 18px; border-radius: 9999px; cursor: pointer;
   background: var(--vmr-button-bg); border: 1px solid var(--vmr-button-border);
   transition: all 0.2s; user-select: none; position: relative;
 }
@@ -717,7 +793,7 @@ async function extractFromZaimanhua() {
           id: ch.chapter_id,
           name: ch.chapter_title,
           url: `./${ch.chapter_id}`,
-          updatedAt: formatTimestamp(ch.updatetime),
+          updatedAt: formatTimestamp(ch.updatetime * 1000),
           order: ch.chapter_order
         }))
         .sort((a, b) => a.order - b.order)
@@ -767,7 +843,7 @@ async function loadCommentsFromZaimanhua(data) {
     const json = await resp.json()
     console.log('[漫画阅读器>再漫画适配器] 获取评论数据:', json)
     const { list, total } = json.data
-    const comments = list
+    const comments = (list || [])
       .map((item) => {
         if (!Array.isArray(item)) return null
         const [chId, , , , , like, uid, content] = item
@@ -781,6 +857,7 @@ async function loadCommentsFromZaimanhua(data) {
     console.error('[漫画阅读器>再漫画适配器] 评论加载失败:', error)
   }
 }
+
 /**
  * 从漫画柜网站提取数据
  */
@@ -1315,6 +1392,16 @@ function getIcon(name, props = '') {
   return `<svg ${props} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-${name}" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter">${ICON[name]}</svg>`
 }
 
+function useConfigItem(key, defaultValue) {
+  const { ref, watch } = Vue
+  const value = ref(GM_getValue(key, defaultValue))
+  watch(value, (val) => {
+    GM_setValue(key, val)
+    console.log(`[漫画阅读器>设置] 修改${key}为${val}`)
+  })
+  return value
+}
+
 function createVueApp() {
   const { createApp, ref, computed, reactive, watch, useTemplateRef } = Vue
 
@@ -1349,18 +1436,36 @@ function createVueApp() {
       const isActiveChapterHighlight = ref(false)
 
       // 主题
-      const theme = ref(GM_getValue(CONFIG.THEME_KEY, CONFIG.DEFAULT_THEME))
+      const theme = useConfigItem(SETTINGS.theme.key, SETTINGS.theme.default)
+
+      // 布局模式
+      const layoutMode = useConfigItem(
+        SETTINGS.layout.key,
+        SETTINGS.layout.default
+      )
+
+      // 垂直模式下的页面宽度
+      const vPageWidth = useConfigItem(
+        SETTINGS.vPageWidth.key,
+        SETTINGS.vPageWidth.default
+      )
+
       // 预载数量
-      const preloadCount = ref(
-        GM_getValue(CONFIG.PRELOAD_COUNT_KEY, CONFIG.PRELOAD_OFFSET)
+      const preloadOffset = useConfigItem(
+        SETTINGS.preload.key,
+        SETTINGS.preload.default
       )
+
       // 加载状态栏模式
-      const statusBarMode = ref(
-        GM_getValue(CONFIG.STATUS_BAR_MODE_KEY, CONFIG.STATUS_BAR_MODE)
+      const statusBarMode = useConfigItem(
+        SETTINGS.statusBar.key,
+        SETTINGS.statusBar.default
       )
+
       // 分页条显示的模式
-      const paginationBarMode = ref(
-        GM_getValue(CONFIG.PAGINATION_BAR_MODE_KEY, CONFIG.PAGINATION_BAR_MODE)
+      const paginationBarMode = useConfigItem(
+        SETTINGS.paginationBar.key,
+        SETTINGS.paginationBar.default
       )
 
       // Toast和对话框
@@ -1401,8 +1506,8 @@ function createVueApp() {
       )
 
       const preloadImages = computed(() => {
-        if (!preloadCount.value || !chapter.current?.images) return []
-        const offset = preloadCount.value
+        if (!preloadOffset.value || !chapter.current?.images) return []
+        const offset = preloadOffset.value
         return Array.from({ length: offset * 2 }, (_, i) => {
           const idx =
             i < offset
@@ -1579,23 +1684,6 @@ function createVueApp() {
 
       const toggleTheme = () => {
         theme.value = theme.value === 'light' ? 'dark' : 'light'
-        GM_setValue(CONFIG.THEME_KEY, theme.value)
-      }
-
-      const handleThemeChange = () => {
-        GM_setValue(CONFIG.THEME_KEY, theme.value)
-      }
-
-      const handlePreloadCountChange = () => {
-        GM_setValue(CONFIG.PRELOAD_COUNT_KEY, preloadCount.value)
-      }
-
-      const handleStatusBarModeChange = () => {
-        GM_setValue(CONFIG.STATUS_BAR_MODE_KEY, statusBarMode.value)
-      }
-
-      const handlePaginationBarModeChange = () => {
-        GM_setValue(CONFIG.PAGINATION_BAR_MODE_KEY, paginationBarMode.value)
       }
 
       const toggleSettings = () => {
@@ -1611,6 +1699,10 @@ function createVueApp() {
       }
       const openReader = () => {
         isReaderVisible.value = true
+      }
+
+      const handleMainContentClick = () => {
+        if (layoutMode.value === 'vertical') toggleUI()
       }
 
       const handleLeftClick = () => {
@@ -1719,6 +1811,7 @@ function createVueApp() {
       )
 
       return {
+        SETTINGS,
         readerContainerEl,
         manga,
         chapter,
@@ -1731,7 +1824,9 @@ function createVueApp() {
         isSettingsVisible,
         isActiveChapterHighlight,
         theme,
-        preloadCount,
+        layoutMode,
+        vPageWidth,
+        preloadOffset,
         statusBarMode,
         paginationBarMode,
         toast,
@@ -1763,14 +1858,11 @@ function createVueApp() {
         toggleSidebar,
         toggleUI,
         toggleTheme,
-        handleThemeChange,
-        handlePreloadCountChange,
-        handleStatusBarModeChange,
-        handlePaginationBarModeChange,
         toggleSettings,
         closeSettings,
         closeReader,
         openReader,
+        handleMainContentClick,
         handleLeftClick,
         handleCenterClick,
         handleRightClick,
@@ -1814,41 +1906,62 @@ function createVueApp() {
               <div class="vmr-setting-item">
                 <label class="vmr-setting-label">主题风格</label>
                 <div class="vmr-setting-options">
-                  <label class="vmr-radio">
-                    <input type="radio" name="theme" value="light" v-model="theme" @change="handleThemeChange"/>
-                    <span class="vmr-radio-label">亮色</span>
-                  </label>
-                  <label class="vmr-radio">
-                    <input type="radio" name="theme" value="dark" v-model="theme" @change="handleThemeChange"/>
-                    <span class="vmr-radio-label">暗色</span>
+                  <label v-for="item of SETTINGS.theme.options" class="vmr-radio">
+                    <input type="radio" name="theme" :value="item.value" v-model="theme" />
+                    <span class="vmr-radio-label">{{ item.label }}</span>
                   </label>
                 </div>
               </div>
+
+              <div class="vmr-setting-item">
+                <label class="vmr-setting-label">阅读模式</label>
+                <div class="vmr-setting-options">
+                  <label v-for="item of SETTINGS.layout.options" class="vmr-radio">
+                    <input type="radio" name="layoutMode" :value="item.value" v-model="layoutMode"/>
+                    <span class="vmr-radio-label">{{ item.label }}</span>
+                  </label>
+                </div>
+              </div>
+
+              <div v-if="layoutMode === 'vertical'" class="vmr-setting-item"> 
+                <label class="vmr-setting-label">显示宽度</label>
+                <div class="vmr-setting-options">
+                  <label v-for="item of SETTINGS.vPageWidth.options" class="vmr-radio">
+                    <input type="radio" name="vPageWidth" :value="item.value" v-model="vPageWidth"/>
+                    <span class="vmr-radio-label">{{ item.label }}</span>
+                  </label>
+                </div>
+              </div>
+
               <div class="vmr-setting-item">
                 <label class="vmr-setting-label">预载数量</label>
                 <div class="vmr-setting-options">
-                  <label v-for="n in 6" :key="n - 1" class="vmr-radio">
-                    <input type="radio" name="preloadCount" :value="n - 1" v-model.number="preloadCount" @change="handlePreloadCountChange"/>
-                    <span class="vmr-radio-label">{{ n - 1 }}</span>
+                  <label v-for="item of SETTINGS.preload.options" class="vmr-radio">
+                    <input type="radio" name="preloadOffset" :value="item.value" v-model.number="preloadOffset" />
+                    <span class="vmr-radio-label">
+                      {{ item.label || item.value }}
+                    </span>
                   </label>
                 </div>
-                <div class="vmr-setting-hint">{{ preloadCount === 0 ? '当前页前后不进行预载' : '当前页前后各预载' + preloadCount + '页' }}</div>
+                <div class="vmr-setting-hint">{{ preloadOffset === 0 ? '当前页前后不进行预载' : '当前页的前后各预载' + preloadOffset + '页' }}</div>
               </div>
+
               <div class="vmr-setting-item">
                 <label class="vmr-setting-label">预载状况</label>
                 <div class="vmr-setting-options">
-                  <label v-for="(v,k) of { none: '不显示', slider: '导航条', bottom: '底部条', both: '都显示' }" class="vmr-radio">
-                    <input type="radio" name="statusBarMode" :value="k" v-model="statusBarMode" @change="handleStatusBarModeChange"/>
-                    <span class="vmr-radio-label">{{ v }}</span>
+                  <label v-for="item of SETTINGS.statusBar.options" class="vmr-radio">
+                    <input type="radio" name="statusBarMode" :value="item.value" v-model="statusBarMode" />
+                    <span class="vmr-radio-label">{{ item.label }}</span>
                   </label>
                 </div>
               </div>
+
               <div v-if="['bottom', 'both'].includes(statusBarMode)" class="vmr-setting-item">
                 <label class="vmr-setting-label">分页底条</label>
                 <div class="vmr-setting-options">
-                  <label v-for="(v,k) of { 'block': '占位', 'fixed': '悬浮' }" class="vmr-radio">
-                    <input type="radio" name="paginationBarMode" :value="k" v-model="paginationBarMode" @change="handlePaginationBarModeChange"/>
-                    <span class="vmr-radio-label">{{ v }}</span>
+                  <label v-for="item of SETTINGS.paginationBar.options" class="vmr-radio">
+                    <input type="radio" name="paginationBarMode" :value="item.value" v-model="paginationBarMode" />
+                    <span class="vmr-radio-label">{{ item.label }}</span>
                   </label>
                 </div>
               </div>
@@ -1961,19 +2074,32 @@ function createVueApp() {
           'has-pagination-bar': ['bottom', 'both'].includes(statusBarMode)
         }">{{ pageStatusText }}</div>
 
-        <div class="vmr-main-content">
-          <div class="vmr-click-zones">
-            <div class="vmr-click-zone left" @click="handleLeftClick"></div>
-            <div class="vmr-click-zone center" @click="handleCenterClick"></div>
-            <div class="vmr-click-zone right" @click="handleRightClick"></div>
+        <div class="vmr-main-content" :data-mode="layoutMode" :style="{ '--vmr-vertical-page-width': vPageWidth }" @click="handleMainContentClick">
+          <div v-if="layoutMode !== 'vertical'" class="vmr-click-zones">
+            <div class="vmr-click-zone zone-left" 
+              @click.stop="handleLeftClick"></div>
+            <div class="vmr-click-zone zone-center" 
+              @click.stop="handleCenterClick"></div>
+            <div class="vmr-click-zone zone-right" 
+              @click.stop="handleRightClick"></div>
           </div>
 
-          <div class="vmr-image-container">
-            <div v-if="currentImage" class="vmr-manga-page">
-              <img :src="currentImage" :alt="'第' + (pageIndex + 1) + '页'" @load="imgStatusList[pageIndex] = 1" @error="imgStatusList[pageIndex] = -1"/>
-            </div>
+          <div v-if="totalPages > 0" class="vmr-image-container">
+            <template v-if="layoutMode === 'paged'">
+              <div v-if="currentImage" class="vmr-manga-page" data-type="paged">
+                <img :src="currentImage" :alt="'第' + (pageIndex + 1) + '页'" @load="imgStatusList[pageIndex] = 1" @error="imgStatusList[pageIndex] = -1"/>
+              </div>
+            </template>
+            <template v-else-if="layoutMode === 'vertical'"> 
+              <div v-for="(item,index) of chapter.current.images" class="vmr-manga-page" data-type="vertical">
+                <img :src="item" :alt="'第' + (index + 1) + '页'" @load="imgStatusList[index] = 1" @error="imgStatusList[index] = -1"/>
+              </div>
+            </template>
+            <template v-else-if="layoutMode === 'horizontal'"> 
+              <div class="vmr-manga-page" data-type="horizontal"></div>
+            </template>
 
-            <div v-else-if="hasComments && isCommentPage" class="vmr-chapter-comments" :class="{'vmr-safe-ui': isUIVisible }">
+            <div v-if="hasComments && (layoutMode !== 'paged' || isCommentPage)" class="vmr-chapter-comments" :class="{'vmr-safe-ui': layoutMode !== 'vertical' && isUIVisible }">
               <div class="vmr-chapter-comments-title">
                 评论 <span>{{ comments.length }}</span>
               </div>
@@ -1986,21 +2112,21 @@ function createVueApp() {
               </div>
             </div>
 
-            <div v-else class="vmr-empty-state">
-              <div class="vmr-empty-state-icon">📖</div>
-              <div class="vmr-empty-state-text">暂无内容，请使用 $vmr.setMangaData 加载漫画数据</div>
-            </div>
-
             <div class="vmr-manga-preload">
               <img v-for="item of preloadImages" :src="item.url" alt="预加载" @load="imgStatusList[item.index] = 1" @error="imgStatusList[item.index] = -1"/>
             </div>
+          </div>
+          
+          <div v-else class="vmr-empty-state">
+            <div class="vmr-empty-state-icon">📖</div>
+            <div class="vmr-empty-state-text">暂无内容，请使用 $vmr.setMangaData 加载漫画数据</div>
           </div>
 
           <div v-if="totalPages && ['bottom', 'both'].includes(statusBarMode)" class="vmr-pagination-bar" :class="{
             'vmr-show': !isUIVisible,
             'vmr-fixed': paginationBarMode === 'fixed'
           }">
-            <div v-for="i of slider.max" class="vmr-slider-status-block" :data-page="i" :data-status="imgStatusList[i - 1]" @click="goToPage(i - 1)">
+            <div v-for="i of slider.max" class="vmr-slider-status-block" :data-page="i" :data-status="imgStatusList[i - 1]" @click.stop="goToPage(i - 1)">
               <span v-if="i - 1 === pageIndex">▼</span>
               <div class="vmr-button-tooltip">{{ i }}</div>
             </div>
