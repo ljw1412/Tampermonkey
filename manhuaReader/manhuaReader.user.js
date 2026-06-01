@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         漫画阅读器
 // @namespace    http://tampermonkey.net/
-// @version      2.5.1
+// @version      2.5.2
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/*
@@ -9,6 +9,8 @@
 // @match        https://m.happymh.com/mangaread/*
 // @match        https://www.2026copy.com/comic/*/chapter/*
 // @require      https://unpkg.com/vue@3/dist/vue.global.prod.js
+// @require      https://unpkg.com/@vueuse/shared
+// @require      https://unpkg.com/@vueuse/core
 // @require      https://scriptcat.org/lib/637/1.4.5/ajaxHooker.js
 // @require      https://cdn.bootcdn.net/ajax/libs/crypto-js/4.2.0/crypto-js.min.js
 // @grant        unsafeWindow
@@ -21,7 +23,6 @@
 
 /* global Vue ajaxHooker */
 // TODO 是否在切换上下页时隐藏UI
-// TODO 待修复：垂直滚动模式下，当前页pageIndex未更新
 // ==================== 常量配置 ====================
 const CONFIG = {
   APP_NAME: '漫画阅读器',
@@ -189,7 +190,7 @@ const STYLES = `
 #vue-manga-reader {
   --vmr-bg-primary: #f5f5f5;
   --vmr-bg-secondary: #fff;
-  --vmr-bg-overlay: rgba(255, 255, 255, 0.85);
+  --vmr-bg-overlay: rgba(255, 255, 255, 0.8);
   --vmr-text-primary: #333;
   --vmr-text-secondary: #666;
   --vmr-text-muted: #999;
@@ -233,7 +234,7 @@ const STYLES = `
 .manga-reader-container[data-theme="dark"] {
   --vmr-bg-primary: #1a1a1a;
   --vmr-bg-secondary: #2d2d2d;
-  --vmr-bg-overlay: rgba(45, 45, 45, 0.85);
+  --vmr-bg-overlay: rgba(45, 45, 45, 0.8);
   --vmr-text-primary: #e0e0e0;
   --vmr-text-secondary: #b0b0b0;
   --vmr-text-muted: #888;
@@ -511,7 +512,7 @@ const STYLES = `
   cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>') 16 16, e-resize;
 }
 
-.vmr-image-container {
+.vmr-manga-container {
   flex: 1; display: flex; padding: 0; height: 0;
   background: var(--vmr-bg-primary); position: relative; z-index: 0;
 }
@@ -519,11 +520,16 @@ const STYLES = `
   position: absolute; top: 0; left: 0; width: 0; height: 0; overflow: hidden;
 }
 .vmr-manga-preload img { width: 0; height: 0; }
-.vmr-manga-page {
-  margin: 0 auto; overflow: hidden; background: var(--vmr-bg-secondary);
-}
-.vmr-manga-page img {
-  width: auto; max-width: 100%; height: 100%; display: block; object-fit: contain;
+.vmr-manga-page { position: relative; margin: 0 auto; background: var(--vmr-bg-secondary); }
+.vmr-manga-page img { width: auto; max-width: 100%; height: 100%; display: block; object-fit: contain; }
+
+.vmr-manga-page-num { position: absolute; bottom: 4px; right: 4px; pointer-events: none; z-index: 10; }
+.vmr-manga-page-num > span { 
+  display: inline-block; padding: 2px 6px;
+  font-size: 12px; line-height: 1; color: var(--vmr-text-primary);
+  background: var(--vmr-bg-overlay); backdrop-filter: blur(4px);
+  border: 1px solid var(--vmr-button-border); border-radius: 9999px;
+  user-select: none; white-space: nowrap;
 }
 
 .vmr-chapter-comments {
@@ -557,19 +563,25 @@ const STYLES = `
 .vmr-main-content[data-mode="vertical"] .vmr-click-zone { 
   width: 100%;
 }
-.vmr-main-content[data-mode="vertical"] .vmr-image-container {
+.vmr-main-content[data-mode="vertical"] .vmr-manga-container {
   flex-direction: column; overflow-y: scroll;
 }
 .vmr-main-content[data-mode="vertical"] .vmr-manga-page { 
   flex-shrink: 0; width: var(--vmr-vertical-page-width);
 }
 .vmr-main-content[data-mode="vertical"] .vmr-manga-page img {
-  width: 100%;
+  width: 100%; object-fit: initial;
+}
+.vmr-main-content[data-mode="vertical"] .vmr-manga-page-num {
+  display: flex; align-items: flex-end; top: 4px; 
+}
+.vmr-main-content[data-mode="vertical"] .vmr-manga-page-num > span {
+  position: sticky; bottom: 12px;
 }
 .vmr-main-content[data-mode="vertical"] .vmr-chapter-comments {
   min-height: 100vh;
 }
-.vmr-main-content[data-mode="horizontal"] .vmr-image-container { 
+.vmr-main-content[data-mode="horizontal"] .vmr-manga-container { 
   overflow-x: scroll;
 }
 .vmr-main-content[data-mode="horizontal"] .vmr-manga-page { 
@@ -1399,8 +1411,9 @@ function getIcon(name, props = '') {
   return `<svg ${props} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" class="vmr-icon vmr-icon-${name}" stroke-width="4" stroke-linecap="butt" stroke-linejoin="miter">${ICON[name]}</svg>`
 }
 
+const { ref, reactive, computed, watch } = Vue
+
 function useConfigItem(key, defaultValue) {
-  const { ref, watch } = Vue
   const value = ref(GM_getValue(key, defaultValue))
   watch(value, (val) => {
     GM_setValue(key, val)
@@ -1410,12 +1423,16 @@ function useConfigItem(key, defaultValue) {
 }
 
 function createVueApp() {
-  const { createApp, ref, computed, reactive, watch, useTemplateRef } = Vue
+  const { createApp, useTemplateRef } = Vue
+  const { useIntersectionObserver } = VueUse
 
   return createApp({
     setup() {
       // DOM Ref
       const readerContainerEl = useTemplateRef('readerContainerEl')
+      const mangaContainerEl = useTemplateRef('mangaContainerEl')
+      const mangaPageEls = useTemplateRef('mangaPageEls')
+      const chapterCommentEl = useTemplateRef('chapterCommentEl')
 
       // 漫画信息
       const manga = ref({})
@@ -1632,25 +1649,28 @@ function createVueApp() {
         )
       }
 
+      const scrollToPage = (index, behavior = 'instant') => {
+        if (layoutMode.value === 'paged') return
+        const pageEl = document.querySelector(
+          hasComments.value && index === totalPages.value
+            ? '.vmr-chapter-comments'
+            : `.vmr-manga-page[data-page="${index + 1}"]`
+        )
+        if (pageEl) {
+          pageEl.scrollIntoView({
+            behavior,
+            block: 'start',
+            inline: 'center',
+            container: 'nearest'
+          })
+        }
+      }
+
       const goToPage = (index) => {
         const limit = totalPages.value - (hasComments.value ? 0 : 1)
         index = Math.max(Math.min(index, limit), 0)
         pageIndex.value = index
-        if (layoutMode.value !== 'paged') {
-          const pageEl = document.querySelector(
-            hasComments.value && index === totalPages.value
-              ? '.vmr-chapter-comments'
-              : `.vmr-manga-page[data-page="${index + 1}"]`
-          )
-          if (pageEl) {
-            pageEl.scrollIntoView({
-              behavior: 'smooth',
-              block: 'center',
-              inline: 'center',
-              container: 'nearest'
-            })
-          }
-        }
+        scrollToPage(index, 'smooth')
       }
 
       const nextPage = () => {
@@ -1815,10 +1835,41 @@ function createVueApp() {
 
       document.addEventListener('keydown', handleKeydown, true)
 
+      let mangaPageObserver = null
+      function stopMangaPageObserver() {
+        if (mangaPageObserver) {
+          mangaPageObserver.stop()
+          mangaPageObserver = null
+          console.log('[漫画阅读器>漫画页监听器] 停止监听')
+        }
+      }
+      function initMangaPageObserver() {
+        stopMangaPageObserver()
+        mangaPageObserver = useIntersectionObserver(
+          () =>
+            [mangaPageEls.value, chapterCommentEl.value].filter(Boolean).flat(),
+          (entries, observerElement) => {
+            entries = entries.filter((entry) => entry.isIntersecting)
+            if (entries.length) {
+              console.log('[漫画阅读器>漫画页监听器] 进场', entries[0].target)
+              const page = entries[0].target.dataset.page
+              if (page) pageIndex.value = Number(page) - 1
+            }
+          },
+          { threshold: layoutMode.value === 'vertical' ? 0 : 1 }
+        )
+        console.log('[漫画阅读器>漫画页监听器] 启动监听')
+      }
+
       // 监听器
       watch(isReaderVisible, (v) => {
         document.documentElement.classList.toggle('vmr-overflow-hidden', v)
-        if (v) scrollToActiveChapter()
+        if (v) {
+          scrollToActiveChapter()
+          if (layoutMode.value === 'vertical') initMangaPageObserver()
+        } else {
+          stopMangaPageObserver()
+        }
       })
 
       watch(pageIndex, (newIndex) => {
@@ -1832,9 +1883,20 @@ function createVueApp() {
         }
       )
 
+      watch(layoutMode, (mode) => {
+        stopMangaPageObserver()
+        setTimeout(() => {
+          if (mode !== 'paged') scrollToPage(pageIndex.value)
+          if (mode === 'vertical') initMangaPageObserver()
+        }, 300)
+      })
+
       return {
         SETTINGS,
         readerContainerEl,
+        mangaContainerEl,
+        mangaPageEls,
+        chapterCommentEl,
         manga,
         chapter,
         pageIndex,
@@ -1873,6 +1935,7 @@ function createVueApp() {
         setData,
         setComments,
         highlightActiveChapter,
+        scrollToPage,
         goToPage,
         nextPage,
         prevPage,
@@ -2091,7 +2154,7 @@ function createVueApp() {
           </div>
         </div>
 
-        <div class="vmr-pagination-status" :class="{
+        <div v-if="layoutMode === 'paged'" class="vmr-pagination-status" :class="{
           'vmr-show': !isUIVisible,
           'has-pagination-bar': ['bottom', 'both'].includes(statusBarMode)
         }">{{ pageStatusText }}</div>
@@ -2106,19 +2169,22 @@ function createVueApp() {
               @click.stop="handleRightClick"></div>
           </div>
 
-          <div v-if="totalPages > 0" class="vmr-image-container">
+          <div v-if="totalPages > 0" ref="mangaContainerEl" class="vmr-manga-container">
             <template v-if="layoutMode === 'paged'">
               <div v-if="currentImage" class="vmr-manga-page">
                 <img :src="currentImage" :alt="'第' + (pageIndex + 1) + '页'" @load="imgStatusList[pageIndex] = 1" @error="imgStatusList[pageIndex] = -1"/>
               </div>
             </template>
             <template v-else-if="['vertical','horizontal'].includes(layoutMode)"> 
-              <div v-for="(item,index) of chapter.current.images" class="vmr-manga-page" :data-page="index + 1">
+              <div v-for="(item,index) of chapter.current.images" ref="mangaPageEls" class="vmr-manga-page" :data-page="index + 1">
                 <img :src="item" :alt="'第' + (index + 1) + '页'" @load="imgStatusList[index] = 1" @error="imgStatusList[index] = -1"/>
+                <div class="vmr-manga-page-num">
+                  <span>P{{ index + 1 }}</span>
+                </div>
               </div>
             </template>
 
-            <div v-if="hasComments && (layoutMode !== 'paged' || isCommentPage)" class="vmr-chapter-comments" :class="{'vmr-safe-ui': layoutMode !== 'vertical' && isUIVisible }">
+            <div v-if="hasComments && (layoutMode !== 'paged' || isCommentPage)" ref="chapterCommentEl" class="vmr-chapter-comments" :class="{'vmr-safe-ui': isUIVisible }" :data-page="totalPages + 1">
               <div class="vmr-chapter-comments-title">
                 评论 <span>{{ comments.length }}</span>
               </div>
@@ -2317,6 +2383,7 @@ if (typeof website.requestHooker === 'function') {
   console.log('[漫画阅读器] 阅读器初始化...')
   // Vue注入
   if (!unsafeWindow.Vue) unsafeWindow.Vue = Vue
+  // if (!unsafeWindow.VueUse) unsafeWindow.Vue = VueUse
   // 注入样式
   GM_addStyle(STYLES)
   // 创建容器
