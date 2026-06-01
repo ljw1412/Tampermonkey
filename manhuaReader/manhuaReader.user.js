@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         漫画阅读器
 // @namespace    http://tampermonkey.net/
-// @version      2.5.2
+// @version      2.5.3
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/*
@@ -1856,7 +1856,7 @@ function createVueApp() {
               if (page) pageIndex.value = Number(page) - 1
             }
           },
-          { threshold: layoutMode.value === 'vertical' ? 0 : 1 }
+          { threshold: layoutMode.value === 'vertical' ? 0.05 : 1 }
         )
         console.log('[漫画阅读器>漫画页监听器] 启动监听')
       }
