@@ -1673,8 +1673,8 @@ function createVueApp() {
         scrollToPage(index, 'smooth')
       }
 
-      const nextPage = () => {
-        if (isUIVisible.value) isUIVisible.value = false
+      const nextPage = (hideUI = true) => {
+        if (hideUI) isUIVisible.value = false
         if (
           pageIndex.value < totalPages.value - 1 ||
           (hasComments.value && pageIndex.value === totalPages.value - 1)
@@ -1685,8 +1685,8 @@ function createVueApp() {
         }
       }
 
-      const prevPage = () => {
-        if (isUIVisible.value) isUIVisible.value = false
+      const prevPage = (hideUI = true) => {
+        if (hideUI) isUIVisible.value = false
         if (pageIndex.value > 0) {
           goToPage(pageIndex.value - 1)
         } else {
@@ -2120,7 +2120,7 @@ function createVueApp() {
             <div class="vmr-navbar-btn vmr-progress-perv" :class="{
               disabled: isFirstPage && !hasPrevChapter,
               'child-icon-rotate-90': isFirstPage
-            }" @click="prevPage">
+            }" @click="prevPage(false)">
               ${getIcon('left')}
               <div class="vmr-button-tooltip">{{ prevButtonTooltip }}</div>
             </div>
@@ -2147,7 +2147,7 @@ function createVueApp() {
             <div class="vmr-navbar-btn vmr-progress-next" :class="{
               disabled: isLastPage && !hasNextChapter,
               'child-icon-rotate-90': isLastPage
-            }" @click="nextPage">
+            }" @click="nextPage(false)">
               ${getIcon('right')}
               <div class="vmr-button-tooltip">{{ nextButtonTooltip }}</div>
             </div>
