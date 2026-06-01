@@ -525,31 +525,6 @@ const STYLES = `
 .vmr-manga-page img {
   width: auto; max-width: 100%; height: 100%; display: block; object-fit: contain;
 }
-.vmr-manga-page[data-type="paged"] {
-  height: 100%; max-width: 100%; box-shadow: var(--vmr-shadow);
-}
-.vmr-manga-page[data-type="vertical"] { 
-  flex-shrink: 0; width: var(--vmr-vertical-page-width);
-}
-.vmr-manga-page[data-type="horizontal"] { 
-}
-.vmr-main-content[data-mode="vertical"] { cursor: pointer; }
-.vmr-main-content[data-mode="vertical"] .vmr-click-zones { 
-  flex-direction: column;
-}
-.vmr-main-content[data-mode="vertical"] .vmr-click-zone { 
-  width: 100%;
-}
-.vmr-main-content[data-mode="vertical"] .vmr-image-container {
-  flex-direction: column; overflow: auto;
-}
-.vmr-main-content[data-mode="vertical"] .vmr-manga-page img {
-  width: 100%;
-}
-.vmr-main-content[data-mode="vertical"] .vmr-chapter-comments {
-  min-height: 100vh;
-}
-
 
 .vmr-chapter-comments {
   height: 100%; width: 100%; max-width: 680px; margin: 0 auto; padding: 16px;
@@ -570,6 +545,38 @@ const STYLES = `
 .vmr-chapter-comment {
   padding: 6px 10px; margin: 0 6px 6px 0;
   border: 1px solid var(--vmr-border-color); border-radius: 9999px;
+}
+
+.vmr-main-content[data-mode="paged"] .vmr-manga-page {
+  height: 100%; max-width: 100%; box-shadow: var(--vmr-shadow);
+}
+.vmr-main-content[data-mode="vertical"] { cursor: pointer; }
+.vmr-main-content[data-mode="vertical"] .vmr-click-zones { 
+  flex-direction: column;
+}
+.vmr-main-content[data-mode="vertical"] .vmr-click-zone { 
+  width: 100%;
+}
+.vmr-main-content[data-mode="vertical"] .vmr-image-container {
+  flex-direction: column; overflow-y: scroll;
+}
+.vmr-main-content[data-mode="vertical"] .vmr-manga-page { 
+  flex-shrink: 0; width: var(--vmr-vertical-page-width);
+}
+.vmr-main-content[data-mode="vertical"] .vmr-manga-page img {
+  width: 100%;
+}
+.vmr-main-content[data-mode="vertical"] .vmr-chapter-comments {
+  min-height: 100vh;
+}
+.vmr-main-content[data-mode="horizontal"] .vmr-image-container { 
+  overflow-x: scroll;
+}
+.vmr-main-content[data-mode="horizontal"] .vmr-manga-page { 
+  flex-shrink: 0; height: 100%; margin: 0 var(--vmr-horizontal-page-gap, 1px);
+}
+.vmr-main-content[data-mode="horizontal"] .vmr-chapter-comments {
+  flex-shrink: 0; width: 100vw; max-width: 100vw;
 }
 
 .vmr-pagination-bar {
@@ -1629,6 +1636,21 @@ function createVueApp() {
         const limit = totalPages.value - (hasComments.value ? 0 : 1)
         index = Math.max(Math.min(index, limit), 0)
         pageIndex.value = index
+        if (layoutMode.value !== 'paged') {
+          const pageEl = document.querySelector(
+            hasComments.value && index === totalPages.value
+              ? '.vmr-chapter-comments'
+              : `.vmr-manga-page[data-page="${index + 1}"]`
+          )
+          if (pageEl) {
+            pageEl.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center',
+              inline: 'center',
+              container: 'nearest'
+            })
+          }
+        }
       }
 
       const nextPage = () => {
@@ -1637,7 +1659,7 @@ function createVueApp() {
           pageIndex.value < totalPages.value - 1 ||
           (hasComments.value && pageIndex.value === totalPages.value - 1)
         ) {
-          pageIndex.value++
+          goToPage(pageIndex.value + 1)
         } else {
           nextChapter()
         }
@@ -1646,7 +1668,7 @@ function createVueApp() {
       const prevPage = () => {
         if (isUIVisible.value) isUIVisible.value = false
         if (pageIndex.value > 0) {
-          pageIndex.value--
+          goToPage(pageIndex.value - 1)
         } else {
           prevChapter()
         }
@@ -2086,17 +2108,19 @@ function createVueApp() {
 
           <div v-if="totalPages > 0" class="vmr-image-container">
             <template v-if="layoutMode === 'paged'">
-              <div v-if="currentImage" class="vmr-manga-page" data-type="paged">
+              <div v-if="currentImage" class="vmr-manga-page">
                 <img :src="currentImage" :alt="'第' + (pageIndex + 1) + '页'" @load="imgStatusList[pageIndex] = 1" @error="imgStatusList[pageIndex] = -1"/>
               </div>
             </template>
             <template v-else-if="layoutMode === 'vertical'"> 
-              <div v-for="(item,index) of chapter.current.images" class="vmr-manga-page" data-type="vertical">
+              <div v-for="(item,index) of chapter.current.images" class="vmr-manga-page" :data-page="index + 1">
                 <img :src="item" :alt="'第' + (index + 1) + '页'" @load="imgStatusList[index] = 1" @error="imgStatusList[index] = -1"/>
               </div>
             </template>
             <template v-else-if="layoutMode === 'horizontal'"> 
-              <div class="vmr-manga-page" data-type="horizontal"></div>
+              <div v-for="(item,index) of chapter.current.images"  class="vmr-manga-page" :data-page="index + 1">
+                <img :src="item" :alt="'第' + (index + 1) + '页'" @load="imgStatusList[index] = 1" @error="imgStatusList[index] = -1"/>
+              </div>
             </template>
 
             <div v-if="hasComments && (layoutMode !== 'paged' || isCommentPage)" class="vmr-chapter-comments" :class="{'vmr-safe-ui': layoutMode !== 'vertical' && isUIVisible }">
