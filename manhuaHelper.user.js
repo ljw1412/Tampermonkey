@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         漫画助手 by:100-A
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.1.1
 // @description  漫画助手 - 支持漫画柜等网站的下载和阅读功能
 // @author       You
 // @match        *://*.manhuagui.com/*
@@ -493,9 +493,6 @@ class ManhuaGuiHandler {
       $this.after(clone)
     })
 
-    // 添加对话框
-    this.createDialog()
-
     // 添加命令显示区域
     $('.chapter').after(
       '<div id="showCommand" style="height: 240px;margin-top: 10px;display: none;" class="comment">' +
@@ -509,16 +506,6 @@ class ManhuaGuiHandler {
     this.bindEvents(chapters)
 
     console.log('[漫画助手] 添加解析条控件成功')
-  }
-
-  /**
-   * 创建对话框
-   */
-  createDialog() {
-    $('body').append(
-      '<div id="dialog" style="position: fixed;right: 50%;bottom: 50%;z-index: 999999;color: black;background-color: white;padding: 5px;display:none;border: 2px solid #F00;transform: translate(50%,50%);">' +
-        '<span id="dialog_text"></span><span id="dialog_time"></span></div>'
-    )
   }
 
   /**
@@ -548,15 +535,19 @@ class ManhuaGuiHandler {
       UI.showDialog('复制成功')
     })
 
-    $('.downloadmode').click((e) => {
+    $('.downloadmode').click(async (e) => {
       $('#Tdownload').text('')
-      const url = $(e.currentTarget).attr('url')
-      this.getDownloadUrls(url)
+      const target = $(e.currentTarget)
+      const url = target.attr('url')
+      console.log('【开始解析】', target.text(), target.get(0))
+      await this.getDownloadUrls(url)
+      target.css('background-color', '#65D265')
+      target.addClass('downloaded')
     })
 
     $('#alldownload').click(() => {
       $('#Tdownload').text('')
-      this.downloadAll(chapters)
+      this.downloadAll($('.downloadmode:not(.downloaded)'))
     })
   }
 
@@ -590,16 +581,21 @@ class ManhuaGuiHandler {
    * 批量下载所有章节
    */
   async downloadAll(chapters) {
+    const delay = 3000
     for (let i = 0; i < chapters.length; i++) {
       setTimeout(async () => {
-        await this.getDownloadUrls($(chapters[i]).attr('href'), true)
+        const chapter = $(chapters[i])
+        console.log('【开始解析】', chapter.text(), chapter.get(0))
+        await this.getDownloadUrls(chapter.attr('href'), true)
+        chapter.css('background-color', '#65D265')
+        chapter.addClass('downloaded')
         if (i < chapters.length - 1) {
-          console.log('【3秒后启动下一章解析】')
+          console.log(`【${delay / 1000}秒后启动下一章解析】`)
         } else {
           $('#Tdownload').append('\npause')
           UI.showDialog('全部解析完成！')
         }
-      }, 3000 * i)
+      }, delay * i)
     }
   }
 
