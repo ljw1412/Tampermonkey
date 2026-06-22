@@ -516,6 +516,36 @@ const _DATA_ = {
         url: 'https://jx.2s0.cn/player/?url='
       },
       {
+        name: 'fongmi',
+        type: [1, 2],
+        url: 'https://json.fongmi.cc/web?url='
+      },
+      {
+        name: 'superplayr',
+        type: [1, 2],
+        url: 'https://super.playr.top/?url='
+      },
+      {
+        name: 'Node解析',
+        type: [1, 2],
+        url: 'https://jx.nodenode.dpdns.org/?url='
+      },
+      {
+        name: '789解析',
+        type: [1, 2],
+        url: 'https://jiexi.789jiexi.icu:4433/?url='
+      },
+      {
+        name: '937解析',
+        type: [1, 2],
+        url: 'https://bfq.937auth.vip?url='
+      },
+      {
+        name: '芒果TV1',
+        type: [1, 2],
+        url: 'https://video.isyour.love/player/getplayer?url='
+      },
+      {
         name: 'm1907',
         type: [1, 2],
         url: 'https://im1907.top/?jx='
