@@ -1533,7 +1533,7 @@ class View {
   display: none;
   flex-direction: column;
   width: 320px;
-  height: 300px;
+  // height: 300px;
   cursor: initial;
   color: #fff;
   font-weight: initial;
@@ -1552,7 +1552,7 @@ class View {
 #${BASE_NAME}_vip-tabs{ display: flex; border-bottom: 1px solid #333; background-color: rgba(255, 255, 255, 0.1);}
 .${BASE_NAME}_vip-tab{ flex-shrink: 0; margin:6px 8px; font-size: 16px; font-weight: bold; cursor: pointer;}
 .${BASE_NAME}_vip-tab[data-active="true"]{ color: #e4a329; }
-#${BASE_NAME}_vip-container{ flex-grow: 1; height: 0; overflow-y: auto; background-color: rgba(255, 255, 255, 0.1);}
+#${BASE_NAME}_vip-container{ flex-grow: 1; background-color: rgba(255, 255, 255, 0.1);}
 #${BASE_NAME}_vip-container::-webkit-scrollbar { width: 6px; height: 6px; }
 #${BASE_NAME}_vip-container::-webkit-scrollbar-thumb { box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2); background: #a8a8a8; border-radius: 4px;}
 #${BASE_NAME}_vip-container::-webkit-scrollbar-track { box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2); background: #000000; }
