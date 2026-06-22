@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.37
+// @version      2.1.38
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -341,16 +341,40 @@ const _DATA_ = {
       mode: 'element',
       container: '#mod_player,#player,#player-container,#main-player',
       videoTag: 'fake-iframe-video,video',
-      // beforeEach() {
-      //   // TODO: 待研究
-      //   const vPlayerEl = document.querySelector('.player.container-player')
-      //   if (vPlayerEl) {
-      //     $logger.info('vPlayerEl', vPlayerEl.__vue__._setupState)
-      //   }
-      // },
+      beforeEach() {
+        let _info = unsafeWindow.__VINFO_DATA__
+        $logger.info('劫持__VINFO_DATA__的获取与设置')
+        Object.defineProperty(unsafeWindow, '__VINFO_DATA__', {
+          configurable: true, // 允许后续再次修改此属性的描述符
+          enumerable: true, // 允许在 for...in 循环中被枚举
+          get: function () {
+            // $logger.debug('[拦截] 正在读取 __VINFO_DATA__，当前值为:', _info)
+            // 可以在这里打断点 debugger; 来调试是谁在读取它
+            return _info
+          },
+          set: function (newValue) {
+            $logger.debug('__VINFO_DATA__正在修改中……')
+            $logger.debug(_info, '->', newValue)
+            try {
+              const { sspKey, proxyhttp } = newValue
+              if (sspKey && proxyhttp[sspKey]) {
+                const sspData = JSON.parse(proxyhttp[sspKey])
+                if (sspData.auth) sspData.auth.is_vip = true
+                sspData.ads = []
+                proxyhttp[sspKey] = JSON.stringify(sspData)
+                $logger.info('__VINFO_DATA__设置时，去广告篡改成功！')
+              }
+            } catch (error) {
+              $logger.error('__VINFO_DATA__篡改失败！', error)
+            }
+            _info = newValue
+          }
+        })
+      },
       requestHooker: {
         filter: [{ url: '/proxyhttp' }],
         hooker(request) {
+          // $logger.debug('requestHooker', request)
           const { url, data } = request
           let params = {}
           if (data) {
@@ -384,7 +408,7 @@ const _DATA_ = {
                   json[sspKey] = JSON.stringify(sspData)
                 }
               } catch (error) {
-                $logger.info('requestHooker', error)
+                $logger.error('requestHooker', error)
               }
               res.responseText = JSON.stringify(json)
               res.response = JSON.stringify(json)
