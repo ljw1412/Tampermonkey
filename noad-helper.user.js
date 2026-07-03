@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.38
+// @version      2.1.39
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -119,35 +119,33 @@ const _DATA_ = {
         const that = this
         if (player) {
           $logger.info('bindEvent', '劫持播放器状态设置事件')
-          const setState = player._view.setState.bind(player._view)
-          player._view.setState = function (e, t) {
-            $logger.debug('Hooked[setState]', ...arguments)
-            if (typeof e === 'object') {
-              if (typeof e.showBlackScreen === 'object') {
-                const { flag, time } = e.showBlackScreen
-                if (flag && time == 45) {
-                  playProxy._adManager.startPlayMovie()
-                  $logger.info('BlackScreen', '尝试强制跳过广告错误的黑屏')
-                }
-                e.showBlackScreen.flag = false
-              }
-            }
-            setState(e, t)
-          }
-          const playInfoUpdate = player._PCBridge.playInfo.update.bind(
-            player._PCBridge.playInfo
+          const playInfoUpdate = player.PCBridge.playInfo.update.bind(
+            player.PCBridge.playInfo
           )
-          player._PCBridge.playInfo.update = function (e) {
+          player.PCBridge.playInfo.update = function (e) {
             $logger.debug('Hooked[playInfo.update]', e)
-            if (
-              typeof e === 'object' &&
-              ['adStartPlay', 'adplaying'].includes(e.playStatus)
-            ) {
-              setTimeout(that.skipAD, 300)
-              isSkipped = true
+            if (typeof e === 'object') {
+              if (['adStartPlay', 'adplaying'].includes(e.playStatus)) {
+                setTimeout(that.skipAD, 300)
+                isSkipped = true
+              }
             }
             playInfoUpdate(e)
           }
+
+          // 尝试解决广告拦截导致45秒黑屏的问题
+          try {
+            Object.defineProperty(playProxy._adManager._sdk, 'isPreload', {
+              configurable: true, // 允许后续再次修改此属性的描述符
+              enumerable: true, // 允许在 for...in 循环中被枚举
+              get: () => true,
+              set: function (newValue) {}
+            })
+            $logger.info('劫持_adManager._sdk.isPreload的获取与设置')
+          } catch (error) {
+            $logger.error('劫持_adManager._sdk.isPreload失败！', error)
+          }
+
           // 隐藏水印
           setTimeout(() => {
             const watermarkImg = document.querySelector('img[src*="watermark"]')
@@ -179,7 +177,8 @@ const _DATA_ = {
         try {
           if (playProxy && playProxy._adManager) {
             $logger.info('skipAD', '发现adManager，尝试跳过广告……')
-            playProxy._adManager.skipAd(true)
+            // skipAD 可选项："seek"/"scan"
+            playProxy._adManager.skipAd('scan')
             return
           }
           throw new Error('未找到控制广告的adManager管理对象')
