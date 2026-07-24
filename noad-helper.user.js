@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.39
+// @version      2.1.40
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -147,13 +147,12 @@ const _DATA_ = {
           }
 
           // 隐藏水印
-          setTimeout(() => {
-            const watermarkImg = document.querySelector('img[src*="watermark"]')
-            if (watermarkImg) {
-              watermarkImg.style.display = 'none'
-              $logger.success('尝试隐藏水印')
-            }
-          }, 500)
+          GM_addStyle(
+            `#videoContent #videoCoverComp, img[src*="watermark"] {
+              display: none !important;
+            }`
+          )
+          $logger.success('添加隐藏水印样式')
         }
         // 兜底跳过事件
         if (!isSkipped && playProxy) {
