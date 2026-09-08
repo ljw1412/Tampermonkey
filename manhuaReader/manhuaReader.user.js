@@ -1270,7 +1270,7 @@ const WEBSITE_ADAPTERS = [
     requestHooker: {
       filter: [{ url: '/comic/detail' }, { url: '/chapter/detail' }],
       hooker(request) {
-        if (!checkReadPage(website)) return
+        if (!checkReadPage(website, true)) return
         const { url, data } = request
         request.response = async (res) => {
           if (res.status !== 200) return
@@ -2237,14 +2237,16 @@ function getWebsite() {
   console.log(`[漫画阅读器] 未找到${host}对应的站点配置`)
 }
 
-function checkReadPage(website) {
+function checkReadPage(website, silent = false) {
   const pathname = location.pathname
   if (!website.pathnameRegEx) {
     console.log(`[漫画阅读器] ${website.name} 未配置阅读页路径规则`)
     return false
   }
   const isMatch = website.pathnameRegEx.test(pathname)
-  console.log(`[漫画阅读器] 阅读页匹配: ${pathname} ${isMatch ? '✓' : '✗'}`)
+  if (!silent) {
+    console.log(`[漫画阅读器] 阅读页匹配: ${pathname} ${isMatch ? '✓' : '✗'}`)
+  }
   return isMatch
 }
 
@@ -2265,7 +2267,8 @@ async function applyMangaData(website, data) {
 
 async function loadMangaData(website, skipCheck = false) {
   try {
-    if (!skipCheck && !checkReadPage(website)) throw new Error('非阅读页！')
+    if (!skipCheck && !checkReadPage(website, true))
+      throw new Error('非阅读页！')
     console.log(`[漫画阅读器] 检测到${website.name}，开始提取数据...`)
     if (typeof website.extract !== 'function') {
       throw new Error('extract不是一个Function')
