@@ -13,6 +13,7 @@
 // @require      https://unpkg.com/@vueuse/core
 // @require      https://scriptcat.org/lib/637/1.4.5/ajaxHooker.js
 // @require      https://cdn.bootcdn.net/ajax/libs/crypto-js/4.2.0/crypto-js.min.js
+// @run-at       document-start
 // @grant        unsafeWindow
 // @grant        GM_addStyle
 // @grant        GM_deleteValue
@@ -2408,7 +2409,6 @@ if (typeof website.requestHooker === 'function') {
   // 创建容器
   const container = document.createElement('div')
   container.id = 'vue-manga-reader'
-  document.body.appendChild(container)
   // 创建Vue应用挂载容器并将实例暴露在window
   const app = createVueApp()
   const $vm = app.mount(container)
@@ -2431,7 +2431,11 @@ if (typeof website.requestHooker === 'function') {
     return isReadPage
   }
 
-  loadData()
+  window.addEventListener('DOMContentLoaded', () => {
+    console.log('[漫画阅读器] DOMContentLoaded! 添加阅读器界面。')
+    document.body.appendChild(container)
+    loadData()
+  })
 
   if (website.spa) {
     startPathnameTimer(() => {
