@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         漫画阅读器
 // @namespace    http://tampermonkey.net/
-// @version      2.5.3
+// @version      2.5.4
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/*
@@ -764,16 +764,35 @@ const STYLES = `
  * 从再漫画网站提取数据
  */
 async function extractFromZaimanhua() {
+  const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
   try {
-    const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
-    if (!win.__NUXT__?.data) {
-      console.error('[漫画阅读器>再漫画适配器] 未找到 __NUXT__ 数据')
-      return null
-    }
+    const [, comicPy, comicId, chapterId] =
+      location.pathname.match(this.pathnameRegEx) || []
+    if (!comicId || !chapterId) throw new Error('未找到漫画id或章节id')
+    console.log(
+      `[漫画阅读器>再漫画适配器] 漫画id=${comicId} 章节id=${chapterId}`
+    )
 
-    const { getCationDetails, getChapters } = win.__NUXT__.data
-    const comicInfo = getCationDetails?.data?.comicInfo
-    const chapterInfo = getChapters?.data?.chapterInfo
+    const detailResp = await fetch(
+      `https://manhua.zaimanhua.com/api/v1/comic2/comic/detail?channel=pc&version=1.0.0&timestamp=${Date.now()}&comic_py=${comicPy}`,
+      {
+        headers: { Authorization: `Bearer ${localStorage.token}` }
+      }
+    )
+    const detailJson = await detailResp.json()
+    console.log('[漫画阅读器>再漫画适配器] 获取漫画详情数据:', detailJson)
+
+    const chapterResp = await fetch(
+      `https://manhua.zaimanhua.com/api/v1/comic2/chapter/detail?channel=pc&version=1.0.0&timestamp=${Date.now()}&comic_id=${comicId}&chapter_id=${chapterId}`,
+      {
+        headers: { Authorization: `Bearer ${localStorage.token}` }
+      }
+    )
+    const chapterJson = await chapterResp.json()
+    console.log('[漫画阅读器>再漫画适配器] 获取当前章节数据:', chapterJson)
+
+    const comicInfo = detailJson?.data?.comicInfo
+    const chapterInfo = chapterJson?.data?.chapterInfo
 
     if (!comicInfo || !chapterInfo) {
       console.error('[漫画阅读器>再漫画适配器] 缺少必要数据')
@@ -1268,7 +1287,7 @@ const WEBSITE_ADAPTERS = [
     name: '再漫画',
     spa: true,
     host: 'zaimanhua.com',
-    pathnameRegEx: /^\/view\//,
+    pathnameRegEx: /^\/view\/(.+?)\/(\d+)\/(\d+)/,
     pathnamePollingDelay: 500,
     loadDelay: 1000,
     extract: extractFromZaimanhua,
