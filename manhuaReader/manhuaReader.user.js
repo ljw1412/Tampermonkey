@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         漫画阅读器
 // @namespace    http://tampermonkey.net/
-// @version      2.5.4
+// @version      2.5.5
 // @description  基于Vue的漫画阅读器，提供统一的阅读界面和数据接口
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/*
@@ -763,36 +763,11 @@ const STYLES = `
 /**
  * 从再漫画网站提取数据
  */
-async function extractFromZaimanhua() {
+async function extractFromZaimanhua(data) {
   const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window
   try {
-    const [, comicPy, comicId, chapterId] =
-      location.pathname.match(this.pathnameRegEx) || []
-    if (!comicId || !chapterId) throw new Error('未找到漫画id或章节id')
-    console.log(
-      `[漫画阅读器>再漫画适配器] 漫画id=${comicId} 章节id=${chapterId}`
-    )
-
-    const detailResp = await fetch(
-      `https://manhua.zaimanhua.com/api/v1/comic2/comic/detail?channel=pc&version=1.0.0&timestamp=${Date.now()}&comic_py=${comicPy}`,
-      {
-        headers: { Authorization: `Bearer ${localStorage.token}` }
-      }
-    )
-    const detailJson = await detailResp.json()
-    console.log('[漫画阅读器>再漫画适配器] 获取漫画详情数据:', detailJson)
-
-    const chapterResp = await fetch(
-      `https://manhua.zaimanhua.com/api/v1/comic2/chapter/detail?channel=pc&version=1.0.0&timestamp=${Date.now()}&comic_id=${comicId}&chapter_id=${chapterId}`,
-      {
-        headers: { Authorization: `Bearer ${localStorage.token}` }
-      }
-    )
-    const chapterJson = await chapterResp.json()
-    console.log('[漫画阅读器>再漫画适配器] 获取当前章节数据:', chapterJson)
-
-    const comicInfo = detailJson?.data?.comicInfo
-    const chapterInfo = chapterJson?.data?.chapterInfo
+    const comicInfo = data?.comicInfo
+    const chapterInfo = data?.chapterInfo
 
     if (!comicInfo || !chapterInfo) {
       console.error('[漫画阅读器>再漫画适配器] 缺少必要数据')
@@ -1282,6 +1257,7 @@ async function extractFromCopyManhua() {
 }
 
 // ==================== 网站适配器配置 ====================
+const $TEMP = {}
 const WEBSITE_ADAPTERS = [
   {
     name: '再漫画',
@@ -1289,9 +1265,49 @@ const WEBSITE_ADAPTERS = [
     host: 'zaimanhua.com',
     pathnameRegEx: /^\/view\/(.+?)\/(\d+)\/(\d+)/,
     pathnamePollingDelay: 500,
-    loadDelay: 1000,
-    extract: extractFromZaimanhua,
-    loadComments: loadCommentsFromZaimanhua
+    // extract: extractFromZaimanhua,
+    loadComments: loadCommentsFromZaimanhua,
+    requestHooker: {
+      filter: [{ url: '/comic/detail' }, { url: '/chapter/detail' }],
+      hooker(request) {
+        if (!checkReadPage(website)) return
+        const { url, data } = request
+        request.response = async (res) => {
+          if (res.status !== 200) return
+          console.log('[漫画阅读器>requestHooker]', url, res)
+          try {
+            const json = JSON.parse(
+              res.responseText || res.response || res.text
+            )
+            console.log(
+              `[漫画阅读器>requestHooker] ${url}\n接口数据`,
+              json.data
+            )
+            let comicId
+            if (url.includes('/comic/detail')) {
+              comicId = json.data?.comicInfo?.id
+            } else if (url.includes('/chapter/detail')) {
+              comicId = json.data?.chapterInfo?.comic_id
+            }
+            if (comicId) {
+              $TEMP[comicId] = { ...$TEMP[comicId], ...json.data }
+              if (
+                'comicInfo' in $TEMP[comicId] &&
+                'chapterInfo' in $TEMP[comicId]
+              ) {
+                console.log(
+                  '[漫画阅读器>requestHooker] 已获取完整数据',
+                  $TEMP[comicId]
+                )
+                const data = await extractFromZaimanhua($TEMP[comicId])
+                applyMangaData(website, data)
+                delete $TEMP[comicId]
+              }
+            }
+          } catch (error) {}
+        }
+      }
+    }
   },
   {
     name: '漫画柜',
@@ -2232,6 +2248,21 @@ function checkReadPage(website) {
   return isMatch
 }
 
+async function applyMangaData(website, data) {
+  try {
+    if (!data) throw new Error('未能提取到数据！')
+    setMangaData(data)
+    // console.log('[漫画阅读器] 数据加载成功')
+    if (typeof website.loadComments === 'function') {
+      const comments = await website.loadComments(data)
+      if (comments) setComments(comments)
+      else console.error('未能获取本章节评论！')
+    }
+  } catch (error) {
+    console.error(`[漫画阅读器] ${website.name}应用数据失败:`, error)
+  }
+}
+
 async function loadMangaData(website, skipCheck = false) {
   try {
     if (!skipCheck && !checkReadPage(website)) throw new Error('非阅读页！')
@@ -2240,14 +2271,7 @@ async function loadMangaData(website, skipCheck = false) {
       throw new Error('extract不是一个Function')
     }
     const data = await website.extract()
-    if (!data) throw new Error('未能提取到数据！')
-    setMangaData(data)
-    console.log('[漫画阅读器] 数据加载成功')
-    if (typeof website.loadComments === 'function') {
-      const comments = await website.loadComments(data)
-      if (comments) setComments(comments)
-      else console.error('未能获取本章节评论！')
-    }
+    applyMangaData(website, data)
   } catch (error) {
     console.error(`[漫画阅读器] ${website.name}数据提取失败:`, error)
   }
