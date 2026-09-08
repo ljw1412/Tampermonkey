@@ -6,7 +6,6 @@
 // @author       huomangrandian、Lingma
 // @match        https://manhua.zaimanhua.com/*
 // @match        https://www.manhuagui.com/comic/*/*.html
-// @match        https://m.happymh.com/mangaread/*
 // @match        https://www.2026copy.com/comic/*/chapter/*
 // @require      https://unpkg.com/vue@3/dist/vue.global.prod.js
 // @require      https://unpkg.com/@vueuse/shared
@@ -1299,103 +1298,6 @@ const WEBSITE_ADAPTERS = [
     host: 'manhuagui.com',
     pathnameRegEx: /^\/comic\/\d+\/\d+.html/,
     extract: extractFromManhuagui
-  },
-  {
-    name: '嗨皮漫画',
-    host: 'm.happymh.com',
-    pathnameRegEx: /^\/mangaread\//,
-    requestHooker: {
-      filter: [
-        { url: '/apis/manga/reading' },
-        { url: '/apis/manga/chapterByPage' }
-      ],
-      hooker(request) {
-        const { url, data } = request
-        request.response = (res) => {
-          if (res.status !== 200) return
-          console.log('[漫画阅读器>requestHooker]', url, res)
-          try {
-            const json = JSON.parse(res.responseText || res.response)
-            const { status, data, msg = '请求错误' } = json
-            if (status !== 0) console.warn('[漫画阅读器>requestHooker]', msg)
-            console.log(status, data)
-            if (url.includes('/apis/manga/reading')) {
-              const manga = {
-                id: data.manga_id,
-                title: data.manga_name,
-                author: '',
-                cover: data.manga_cover,
-                status: data.isEn ? '已完结' : '连载中',
-                url: `/manga/${data.manga_code}`
-              }
-
-              const current = {
-                id: data.id,
-                name: data.chapter_name,
-                url: location.href,
-                images: data.scans.map((item) =>
-                  item.url.replace('q=50', 'q=99')
-                ),
-                pageCount: data.scans.length
-              }
-              const previous = data.pre_cid
-                ? {
-                    id: data.pre_cid,
-                    name: '上一章',
-                    url: `./${data.pre_cid}`
-                  }
-                : null
-              const next = data.next_cid
-                ? {
-                    id: data.next_cid,
-                    name: '下一章',
-                    url: `./${data.next_cid}`
-                  }
-                : null
-              const list = []
-              const groups = [{ title: '章节', data: list }]
-
-              setMangaData({
-                manga,
-                chapter: { current, previous, next, list, groups }
-              })
-            } else if (url.includes('/apis/manga/chapterByPage')) {
-              const readerChapter = getReaderChapter() || {}
-              const { items } = data
-              const list = [
-                ...items
-                  .map((item) => ({
-                    id: item.id,
-                    name: item.chapterName,
-                    url: `./${item.id}`,
-                    order: item.order
-                  }))
-                  .reverse(),
-                ...readerChapter.list
-              ]
-              const urlObj = new URL(res.finalUrl)
-              const cid = parseInt(urlObj.searchParams.get('cid'))
-              const currentIndex = list.findIndex((ch) => ch.id === cid)
-              let previous = currentIndex > 0 ? list[currentIndex - 1] : null
-              if (!previous && readerChapter.previous) {
-                previous = readerChapter.previous
-                if (~currentIndex) list.splice(currentIndex, 0, previous)
-              }
-              let next =
-                currentIndex < list.length - 1 ? list[currentIndex + 1] : null
-              if (!next && readerChapter.next) {
-                next = readerChapter.next
-                if (~currentIndex) list.splice(currentIndex + 1, 0, next)
-              }
-              const groups = [{ title: '章节', data: list }]
-              setMangaData({ chapter: { previous, next, list, groups } })
-            }
-          } catch (error) {
-            console.error('[漫画阅读器>requestHooker]', error)
-          }
-        }
-      }
-    }
   },
   {
     name: '拷贝漫画',
