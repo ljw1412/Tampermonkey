@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频网站去广告+VIP解析
 // @namespace    http://tampermonkey.net/
-// @version      2.1.40
+// @version      2.1.41
 // @description  跳过视频网站前置广告
 // @author       huomangrandian
 // @match        https://*.youku.com/v_show/id_*
@@ -494,34 +494,9 @@ const _DATA_ = {
         url: 'https://jx.playerjy.com/?url='
       },
       {
-        name: '973播放',
-        type: [1, 2],
-        url: 'https://jx.973973.xyz/?url='
-      },
-      {
-        name: '云溪',
-        type: [1, 2],
-        url: 'https://jx.yparse.com/index.php?url='
-      },
-      {
         name: 'hls解析',
         type: [1, 2],
         url: 'https://jx.hls.one/?url='
-      },
-      {
-        name: '极速2',
-        type: [1, 2],
-        url: 'https://jx.2s0.cn/player/?url='
-      },
-      {
-        name: 'fongmi',
-        type: [1, 2],
-        url: 'https://json.fongmi.cc/web?url='
-      },
-      {
-        name: 'superplayr',
-        type: [1, 2],
-        url: 'https://super.playr.top/?url='
       },
       {
         name: 'Node解析',
@@ -532,11 +507,6 @@ const _DATA_ = {
         name: '789解析',
         type: [1, 2],
         url: 'https://jiexi.789jiexi.icu:4433/?url='
-      },
-      {
-        name: '937解析',
-        type: [1, 2],
-        url: 'https://bfq.937auth.vip?url='
       },
       {
         name: '芒果TV1',
@@ -557,11 +527,6 @@ const _DATA_ = {
         name: 'IK9',
         type: [1, 2],
         url: 'https://yparse.ik9.cc/index.php?url='
-      },
-      {
-        name: '剖元',
-        type: [1, 2],
-        url: 'https://www.pouyun.com/?url='
       },
       {
         name: 'M3U8TV',
