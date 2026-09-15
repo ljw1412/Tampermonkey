@@ -321,7 +321,7 @@ const STYLES = `
   font-size: 16px; font-weight: bold; background: var(--vmr-bg-secondary);}
 .vmr-chapter-list {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-  column-gap: 6px; row-gap: 6px; color: var(--vmr-text-primary);
+  column-gap: 6px; row-gap: 6px; padding: 1px 0; color: var(--vmr-text-primary);
 }
 .vmr-chapter-item {
   position: relative; padding: 16px 12px; border-radius: 6px; cursor: pointer;
